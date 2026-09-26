@@ -6,5 +6,4 @@ COPY packages/database ./packages/database
 RUN npm run db:generate
 COPY . .
 USER node
-EXPOSE 4320
-CMD ["sh", "-c", "npm run db:migrate && exec npm start"]
+CMD ["sh", "-c", "npm run db:migrate && exec npm run scheduler"]
