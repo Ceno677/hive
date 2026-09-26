@@ -28,8 +28,12 @@ const check=async(name:string,fn:()=>Promise<void>)=>{
 };
 console.log('HIVE PRODUCTION READINESS CHECK (read-only; no deploys, payments or writes)');
 console.log('Approved mint price: 8,888 HMD | seat cap: 888 | wallet cap: '+c.MAX_SEATS_PER_WALLET);
-console.log('Models: '+(['PLANNER','BUILDER','REVIEWER','FINAL'] as const).map(role=>role+'='+(c[`AI_${role}_MODEL`]??c.AI_MODEL??'MISSING')).join(', '));
-console.log('Model policy: '+c.AI_API_STYLE+', reasoning='+c.AI_REASONING_EFFORT+', timeout='+c.AI_REQUEST_TIMEOUT_MS+'ms, retries='+c.AI_MAX_RETRIES);
+const configuredModels=[
+ ['PRICING',c.AI_PRICING_MODEL??'gpt-6-luna'],
+ ...(['PLANNER','BUILDER','REVIEWER','FINAL'] as const).map(role=>[role,c[`AI_${role}_MODEL`]??c.AI_MODEL??'MISSING'])
+] as const;
+console.log('Models: '+configuredModels.map(([role,model])=>role+'='+model).join(', '));
+console.log('Model policy: '+c.AI_API_STYLE+', build reasoning='+c.AI_REASONING_EFFORT+', pricing reasoning='+c.AI_PRICING_REASONING_EFFORT+', timeout='+c.AI_REQUEST_TIMEOUT_MS+'ms, retries='+c.AI_MAX_RETRIES);
 
 await check('PostgreSQL and independent online capacity',async()=>{
  await db.$queryRaw`SELECT 1`;
@@ -77,7 +81,7 @@ if(c.NETLIFY_TOKEN&&c.NETLIFY_SITE_ID)await check('Netlify site access',async()=
 });
 
 if(c.AI_API_KEY)await check('AI model access',async()=>{
- const models=[...new Set((['PLANNER','BUILDER','REVIEWER','FINAL'] as const).map(role=>c[`AI_${role}_MODEL`]??c.AI_MODEL).filter(Boolean))] as string[];
+ const models=[...new Set(configuredModels.map(([,model])=>model).filter(model=>model!=='MISSING'))];
  for(const model of models){
   const headers:Record<string,string>=c.AI_PROVIDER==='anthropic'?{'x-api-key':c.AI_API_KEY!,'anthropic-version':'2023-06-01'}:{authorization:'Bearer '+c.AI_API_KEY};
   const response=await fetch(c.AI_BASE_URL.replace(/\/$/,'')+'/models/'+encodeURIComponent(model),{headers});if(!response.ok)throw Error(model+' returned HTTP '+response.status);

@@ -107,6 +107,8 @@ Ordinary build jobs enter the delivery stage after independent review and truste
 
 GitHub requires a configured GitHub App with Contents read/write permission. Set the App ID, private key, Client ID and Client Secret to enable wallet-linked customer installations. A customer authorizes the App, the backend records only repositories that GitHub says that user can push to, and final delivery is constrained to that wallet-linked list. The short-lived GitHub user token is not stored. A static operator installation plus `GITHUB_ALLOWED_OWNER` remains available as a fallback. Successful GitHub delivery is mandatory before completion or payout. The delivery branch is deterministic for retry recovery and is not silently merged into the default branch.
 
+Delivery requires a clean repository with no existing GitHub Actions workflows, and generated bundles cannot add workflow files. This prevents a branch push containing untrusted generated code from activating repository workflows with access to repository secrets. Customers can copy or merge the reviewed branch into a different repository themselves after inspection.
+
 Static hosting requires NETLIFY_TOKEN and NETLIFY_SITE_ID. Published files are checked against stored hashes before the release becomes complete. Site updates use explicit artifact-bound approval.
 
 Solana-app mode holds rewards while the program release awaits approval. After a trusted devnet deployment, the frontend task receives actual program/IDL details and must emit a matching hive-deployment.json. The reviewed website then waits for hosting approval and live asset validation before completion and settlement.
@@ -136,9 +138,11 @@ npx tsx infra/scripts/browser-smoke.ts
 npm run test:program
 ```
 
-Integration tests need a dedicated PostgreSQL database named hive_test. Create it once with docker exec hive-postgres-1 psql -U hive -d postgres -c "CREATE DATABASE hive_test". Each run creates a random schema, migrates it, and removes only that schema afterwards.
+Local integration tests need a dedicated PostgreSQL database named `hive_test`. Create it once with `docker exec hive-postgres-1 psql -U hive -d postgres -c "CREATE DATABASE hive_test"`. Each run creates a random schema, migrates it, and removes only that schema afterwards. `npm run test:integration:railway` creates a uniquely named temporary database, runs the same suite, and removes the database; use it only with a database role allowed to create/drop databases.
 
-Unit tests run without external credentials; integration tests use actual PostgreSQL and Docker but explicit chain/model doubles. Browser smoke uses a generated test wallet to sign a real challenge against the local API. Rust tests compile the native program and exercise accounting. These do not replace validator/devnet transaction tests.
+Unit tests run without external credentials; integration tests use actual PostgreSQL and explicit chain/model doubles. Browser smoke serves the real frontend in isolation and uses a generated wallet plus mocked unavailable API states; API signature verification is covered separately by the PostgreSQL integration suite. Rust tests compile the native program and exercise accounting when Docker/tooling is available. These do not replace validator/devnet transaction tests.
+
+An unlisted devnet test token can set `DEVNET_TEST_HMD_PRICE_USD` in an isolated staging environment so quote/payment paths can be exercised before HMD has a DEX market. Configuration refuses this override on `mainnet-beta`; mainnet quotes always use the live liquidity-checked DEX source.
 
 ## Operations
 

@@ -21,5 +21,6 @@ describe('domain invariants',()=>{
  });
  it.each(['../secret','/etc/passwd','C:/secret','a/../b','a\\b','a//b'])('rejects unsafe path %s',p=>expect(safePath.safeParse(p).success).toBe(false));
  it('enforces task write scope',()=>expect(()=>checkWrites({files:[{path:'api/secret',content:'x'}]},['ui'])).toThrow());
+ it.each(['.github/workflows/deploy.yml','.GITHUB/workflows/release.yml'])('blocks generated GitHub Actions at %s',path=>expect(()=>checkWrites({files:[{path,content:'x'}]},['.github'])).toThrow('reserved_path'));
  it('smooths small samples',()=>expect(reputation(1,0,0)).toBeLessThan(reputation(100,1,0)));
 });

@@ -27,6 +27,7 @@ const schema = z.object({
   HMD_PRICE_MAX_DEVIATION_BPS: z.coerce.number().int().min(100).max(10000).default(1500),
   HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS: z.coerce.number().int().min(10).max(5000).default(500),
   HMD_PRICE_CACHE_SECONDS: z.coerce.number().int().min(5).max(120).default(20),
+  DEVNET_TEST_HMD_PRICE_USD: z.preprocess(v=>v===''?undefined:v,z.string().regex(/^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,18})?$/).refine(v=>Number(v)>0).optional()),
   AI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   AI_API_KEY: optional, AI_MODEL: optional,
   AI_PLANNER_MODEL: optional, AI_PRICING_MODEL: optional, AI_BUILDER_MODEL: optional, AI_REVIEWER_MODEL: optional, AI_FINAL_MODEL: optional,
@@ -82,6 +83,7 @@ export function config(env: NodeJS.ProcessEnv = process.env): Config {
   if(c.HOLDER_DISTRIBUTIONS_ENABLED==='true'&&c.PAYMENT_MODE!=='custodial')throw new Error('Holder distributions currently require custodial payment mode');
   if(Boolean(c.GITHUB_CLIENT_ID)!==Boolean(c.GITHUB_CLIENT_SECRET))throw new Error('GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured together');
   if(c.JOB_MIN_PRICE_USD>c.JOB_MAX_PRICE_USD)throw new Error('JOB_MIN_PRICE_USD must not exceed JOB_MAX_PRICE_USD');
+  if(c.DEVNET_TEST_HMD_PRICE_USD&&c.SOLANA_CLUSTER==='mainnet-beta')throw new Error('DEVNET_TEST_HMD_PRICE_USD is forbidden on mainnet-beta');
   if (c.NODE_ENV === 'production') {
     const invalid=[
       !c.PUBLIC_ORIGIN.startsWith('https:')&&'HTTPS PUBLIC_ORIGIN',

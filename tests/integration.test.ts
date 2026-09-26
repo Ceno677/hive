@@ -1,4 +1,4 @@
-import {describe,it,expect,beforeAll,afterAll} from 'vitest';
+import {describe,it,expect,beforeAll,beforeEach,afterAll} from 'vitest';
 import {PrismaClient} from '@prisma/client';
 import {Keypair} from '@solana/web3.js';
 import nacl from 'tweetnacl';
@@ -41,6 +41,10 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   const a=await engine.enroll(wallet,{seatId:887,deviceKey:Keypair.generate().publicKey.toBase58(),name:'Test builder',capabilities:['html'],maxConcurrent:1,public:false});
   const b=await engine.enroll(second,{seatId:888,deviceKey:Keypair.generate().publicKey.toBase58(),name:'Test verifier',capabilities:['html'],maxConcurrent:1,public:false});
   builder=await db.worker.findUniqueOrThrow({where:{id:a.id}});verifier=await db.worker.findUniqueOrThrow({where:{id:b.id}});
+ });
+ beforeEach(async()=>{
+  if(!builder||!verifier)return;
+  await db.worker.updateMany({where:{id:{in:[builder.id,verifier.id]}},data:{status:'ONLINE',heartbeatAt:new Date()}});
  });
  afterAll(async()=>{
   await server?.app.close();await db.$disconnect();

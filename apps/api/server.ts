@@ -92,7 +92,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   cluster:c.SOLANA_CLUSTER,hosted:true,
   mint:{enabled:!missing(c,mintRequired).length,missing:missing(c,mintRequired)},
   jobs:{enabled:!jobMissing.length&&c.EXECUTION_ENABLED==='true',missing:jobMissing,execution:c.EXECUTION_ENABLED==='true'},
-  pricing:{model:'AI_MARKET_RESEARCH',marketPercentageBps:c.JOB_PRICE_MARKET_BPS,quoteTtlSeconds:c.JOB_QUOTE_TTL_SECONDS,source:'dexscreener',minimumLiquidityUsd:c.HMD_PRICE_MIN_LIQUIDITY_USD,maxQuoteLiquidityBps:c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS},
+  pricing:{model:'AI_MARKET_RESEARCH',marketPercentageBps:c.JOB_PRICE_MARKET_BPS,quoteTtlSeconds:c.JOB_QUOTE_TTL_SECONDS,source:c.DEVNET_TEST_HMD_PRICE_USD?'devnet-test':'dexscreener',minimumLiquidityUsd:c.HMD_PRICE_MIN_LIQUIDITY_USD,maxQuoteLiquidityBps:c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS},
   skills:Object.keys(skills).filter(s=>s!=='rust'||!!c.RUST_SANDBOX_IMAGE),tokenMint:c.HMD_MINT??null,quality:{reviewQuorum:c.REVIEW_QUORUM,repairPasses:c.AGENT_REPAIR_PASSES},
   delivery:{site:c.NETLIFY_SITE_ID??null,githubOwner:c.GITHUB_ALLOWED_OWNER??null,githubConnect:Boolean(c.GITHUB_CLIENT_ID&&c.GITHUB_CLIENT_SECRET),programConfigured:c.SOLANA_RELEASES_ENABLED==='true'&&Boolean(c.DEPLOY_PROGRAM_SEED&&c.SOLANA_BUILD_IMAGE)},
   holderDistributions:{enabled:c.HOLDER_DISTRIBUTIONS_ENABLED==='true',intervalHours:c.HOLDER_DISTRIBUTION_INTERVAL_HOURS},

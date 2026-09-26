@@ -57,8 +57,9 @@ export function reputation(accepted:number,rejected:number,timeouts:number) {
 }
 export function checkWrites(bundle:Bundle, paths:string[]) {
  for(const file of bundle.files) {
+  const lower=file.path.toLowerCase();
+  if(lower.startsWith('.hive/')||lower.startsWith('.git/')||lower==='.github/workflows'||lower.startsWith('.github/workflows/')||file.path==='Dockerfile')throw new Fault(422,'reserved_path');
   if(!paths.some(p=>file.path===p||file.path.startsWith(p+'/')))throw new Fault(422,'write_outside_policy');
-  if(file.path.startsWith('.hive/')||file.path.startsWith('.git/')||file.path==='Dockerfile')throw new Fault(422,'reserved_path');
  }
 }
 export const skills = {

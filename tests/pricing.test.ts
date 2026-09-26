@@ -41,4 +41,13 @@ describe('dynamic job pricing',()=>{
   const model={async json(){return{estimatedHours:500,marketRateUsd:500,complexity:'EXPERT',confidence:'HIGH',factors:['Large expert build'],sources:[{title:'Current market benchmark',url:'https://example.com/rates'}]};}};
   await expect(createJobPricing({c:config({NODE_ENV:'test'}),model,prompt:'Build a very large expert application',plan,mode:'BUILD',mint:shallow,decimals:6,now:Date.parse('2026-09-26T12:30:00Z')})).rejects.toMatchObject({code:'token_price_depth_insufficient'});
  });
+
+ it('uses an explicit devnet-only test price without weakening mainnet pricing',async()=>{
+  const fetch=vi.fn();vi.stubGlobal('fetch',fetch);
+  const model={async json(){return{estimatedHours:10,marketRateUsd:50,complexity:'STANDARD',confidence:'HIGH',factors:['Full devnet flow'],sources:[{title:'Current market benchmark',url:'https://example.com/rates'}]};}};
+  const c=config({NODE_ENV:'test',SOLANA_CLUSTER:'devnet',DEVNET_TEST_HMD_PRICE_USD:'0.10'});
+  const quote=await createJobPricing({c,model,prompt:'Build and test a devnet application',plan,mode:'BUILD',mint,decimals:6,now:Date.parse('2026-09-26T13:00:00Z')});
+  expect(quote.tokenPriceSource).toBe('devnet-test');expect(quote.amountBaseUnits).toBe('2500000000');expect(fetch).not.toHaveBeenCalled();
+  expect(()=>config({NODE_ENV:'production',SOLANA_CLUSTER:'mainnet-beta',DEVNET_TEST_HMD_PRICE_USD:'0.10',PUBLIC_ORIGIN:'https://example.com',TRUST_PROXY:'true',ARTIFACT_STORAGE:'s3',S3_SECRET_KEY:'secure',OPERATIONS_TOKEN:'secure',TURNSTILE_SITE_KEY:'site',TURNSTILE_SECRET_KEY:'secret'})).toThrow('forbidden on mainnet-beta');
+ });
 });

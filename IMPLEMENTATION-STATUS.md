@@ -1,6 +1,6 @@
 # Implementation status
 
-This repository now contains a backend implementation and web integration. It is not a deployed or audited production protocol.
+This repository contains the backend and web integration, with the API and scheduler deployed on Railway. It has not received an independent security audit and paid mainnet actions remain disabled.
 
 ## Implemented
 
@@ -24,25 +24,26 @@ This repository now contains a backend implementation and web integration. It is
 ## Verified here
 
 - TypeScript checking and frontend/collection verification.
-- The full integration run passes 55 tests across readiness dependencies, domain rules, public-proof privacy, per-workflow deployment identities, agent quality controls, two-reviewer quorum and reward division, delivery-gated payout, deadline refund, transactions, PostgreSQL orchestration and real-container isolation. The default check intentionally skips tests that require the dedicated database/container environment.
+- The local gate passes 51 tests. An isolated temporary Railway PostgreSQL database applied all nine migrations and passed 71 tests across readiness dependencies, domain rules, public-proof privacy, agent quality controls, two-reviewer quorum and reward division, delivery-gated payout, deadline refund, transactions and orchestration. Three container-only tests remain skipped without a Docker host.
 - Real Ed25519 authentication, replay/CSRF rejection, simultaneous task claims, stale lease rejection, independent review, retry after failed trusted checks, final reward conservation, ownership revocation and privacy.
 - Cancellation during pending funding, recovery of direct wallet broadcasts, finalized-height expiry and confirmation of issuance after an NFT transfer.
 - Configurable planner/builder/reviewer/final model routing, bounded test-and-critique repairs, preserved repair patches and trusted rejection details passed back to builders. These are tested controls, not a claim that actual model output has passed a quality benchmark.
-- Browser smoke: wallet login against the actual API, build/mint dialogs, honest unconfigured states, theme switching and mobile rendering. Test wallet is a generated fixture.
+- Browser smoke: the real frontend bundle, generated wallet-signing UI, build/mint dialogs, honest unconfigured states, theme switching and mobile rendering with no page errors. Real API signature authentication is verified by the database integration suite.
 - The conversational form recognizes concise mint requests such as `pls mint`, `agent pls mint` and `mint one NFT`, then enters the same wallet-approved mint flow.
-- A complete release candidate validated 888/888 unique locked 480x480 PNGs and 888/888 metadata documents, plus collection metadata and the exact mint-policy manifest.
+- A complete release candidate validated 888/888 unique locked 480x480 PNGs and 888/888 metadata documents, plus collection metadata and the exact mint-policy manifest. A remote fast-finality audit re-fetched and matched all 1,778 permanent release files.
 - Native Rust compilation and six Rust tests, including Anchor's generated program-ID test, three accounting checks and bounded-deadline checks.
 - Read-only connection to the public Solana devnet RPC.
-- npm audit reported zero known vulnerabilities after dependency updates and overrides.
+- The configured Backblaze private bucket passed an actual temporary write/read/delete round trip. Production dependency audit reports zero known vulnerabilities, and tracked files/history contain no supplied API-key patterns.
+- The configured OpenAI pricing model completed a real web-researched structured quote; production model-access probes pass for pricing, planning, building, reviewing and final validation.
 
 ## Not yet verified live
 
-- No real HMD mint, collection address, production policy, deployment keypair or funded operator accounts were supplied.
-- No permanent IPFS/Arweave upload destination was supplied, so the final image and metadata directory URIs are intentionally not fabricated or published.
-- No real model credentials were supplied; provider-backed paid build/review has not been executed.
+- HMD does not exist yet, so the final mainnet token binding, exact base-unit burn amount and market-liquidity checks cannot run.
+- The permanent Arweave NFT release and mainnet collection are prepared, but no live 8,888 HMD burn/mint transaction has run.
+- Provider credentials and role models are configured, but a complete provider-backed builder/reviewer delivery benchmark has not run because the execution host and three independent NFT operators are not online.
 - No mint/burn/escrow transaction, metadata CPI or payout has run against a validator/devnet in this session. Native Rust tests are not validator integration tests.
 - No SBF artifact was built using installed Anchor/Solana tooling in this environment.
-- GitHub, Netlify, S3 and actual Solana deployment adapters need credentialed smoke tests.
+- Backblaze is verified. GitHub delivery and Netlify frontend/proxy deployment still need their remaining credentials and credentialed smoke tests.
 - The holder snapshot and distribution ledger are implemented but no real HMD payout has run; keep HOLDER_DISTRIBUTIONS_ENABLED=false until a small live payout is inspected.
 - GitHub delivery publishes a deterministic branch to an existing repository in the wallet-linked installation. Automatic creation or transfer of a brand-new repository is not implemented.
 - Solana build-image/offline-dependency preparation is operator setup; the base container is not a complete arbitrary-program toolchain.

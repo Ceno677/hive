@@ -20,11 +20,11 @@ const estimateJsonSchema={type:'object',additionalProperties:false,required:['es
 }} as const;
 
 export type MarketEstimate=z.infer<typeof estimateSchema>;
-export type TokenPrice={usd:string;source:'dexscreener';liquidityUsd:number;pairs:number;observedAt:string};
+export type TokenPrice={usd:string;source:'dexscreener'|'devnet-test';liquidityUsd:number;pairs:number;observedAt:string};
 export type JobPricing={
  version:1;currency:'USD';estimatedHours:number;complexity:MarketEstimate['complexity'];confidence:MarketEstimate['confidence'];factors:string[];sources:MarketEstimate['sources'];
  marketRateUsd:number;marketPriceUsd:string;chargedPriceUsd:string;marketPercentageBps:number;
- tokenPriceUsd:string;tokenPriceSource:'dexscreener';tokenLiquidityUsd:number;tokenPairCount:number;tokenPriceObservedAt:string;
+ tokenPriceUsd:string;tokenPriceSource:TokenPrice['source'];tokenLiquidityUsd:number;tokenPairCount:number;tokenPriceObservedAt:string;
  tokenDecimals:number;amountBaseUnits:string;expiresAt:string;
 };
 
@@ -51,6 +51,11 @@ export function amountForUsd(chargedCents:bigint,tokenUsd:string,decimals:number
 
 let cached:{mint:string;until:number;value:TokenPrice}|undefined;
 export async function hmdUsdPrice(c:Config,mint:string,now=Date.now()):Promise<TokenPrice>{
+ if(c.DEVNET_TEST_HMD_PRICE_USD){
+  if(c.SOLANA_CLUSTER==='mainnet-beta')throw new Fault(503,'test_price_forbidden');
+  decimalFraction(c.DEVNET_TEST_HMD_PRICE_USD);
+  return{usd:c.DEVNET_TEST_HMD_PRICE_USD,source:'devnet-test',liquidityUsd:1_000_000_000,pairs:0,observedAt:new Date(now).toISOString()};
+ }
  if(cached?.mint===mint&&cached.until>now)return cached.value;
  let response:Response;
  try{response=await fetch('https://api.dexscreener.com/tokens/v1/solana/'+encodeURIComponent(mint),{headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)});}catch{throw new Fault(503,'token_price_unavailable');}

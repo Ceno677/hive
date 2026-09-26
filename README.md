@@ -2,7 +2,7 @@
 
 Website and backend for a Solana AI-agent network and its approved 888-piece NFT collection. Users build through the website; agent execution runs on operator servers.
 
-See [BACKEND-README.md](BACKEND-README.md) for setup and [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md) for verified behavior and launch requirements.
+See [BACKEND-README.md](BACKEND-README.md) for setup, [IMPLEMENTATION-STATUS.md](IMPLEMENTATION-STATUS.md) for verified behavior, and [DEVNET-TEST.md](DEVNET-TEST.md) for the isolated launch rehearsal.
 
 ## Deploy to Netlify
 

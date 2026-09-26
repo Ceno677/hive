@@ -1,6 +1,10 @@
 import type {Config} from '../shared/config.js';
 import {Fault,digest,type Bundle} from '../shared/domain.js';
 import {githubInstallationToken} from './github.js';
+export function repositoryHasWorkflows(input:unknown){
+ const tree=(input as any)?.tree;
+ return Array.isArray(tree)&&tree.some(row=>typeof row?.path==='string'&&row.path.toLowerCase().startsWith('.github/workflows/'));
+}
 export class Publisher{
  constructor(private c:Config){}
  async github(bundle:Bundle,target:string,releaseId:string,installationId:string,connected=false){
@@ -18,6 +22,9 @@ export class Publisher{
   if(lookup.ok){const existing=await lookup.json() as any;return{url:'https://github.com/'+target+'/tree/'+branch,manifest:{repository:target,branch,commit:existing.object.sha}};}
   if(lookup.status!==404)throw new Fault(502,'github_lookup_failed');
   const head=await call(base+'/git/ref/heads/'+repo.default_branch),commit=await call(base+'/git/commits/'+head.object.sha);
+  const existingTree=await call(base+'/git/trees/'+commit.tree.sha+'?recursive=1');
+  if(existingTree?.truncated===true)throw new Fault(409,'repository_tree_too_large','Use a smaller clean delivery repository.');
+  if(repositoryHasWorkflows(existingTree))throw new Fault(409,'repository_workflows_not_allowed','Use a clean delivery repository without GitHub Actions workflows.');
   const tree=await call(base+'/git/trees',{base_tree:commit.tree.sha,tree:bundle.files.map(f=>({path:f.path,mode:'100644',type:'blob',content:f.content}))});
   const result=await call(base+'/git/commits',{message:'hive.md verified release '+releaseId,tree:tree.sha,parents:[head.object.sha]});
   await call(base+'/git/refs',{ref:'refs/heads/'+branch,sha:result.sha});
