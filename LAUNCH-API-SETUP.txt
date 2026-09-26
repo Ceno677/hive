@@ -434,7 +434,7 @@ Safe public/product information:
 - Production domain
 - Mainnet or devnet decision
 - HMD mint public address
-- Fixed job price in whole HMD
+- Dynamic job policy confirmation: AI market estimate charged at 50%
 - Builder percentage
 - Verifier percentage
 - Treasury percentage/remainder

@@ -115,6 +115,15 @@ async function draft(){
   const q=await api('/requests/quote',{requestKey:crypto.randomUUID(),prompt,public:false,mode,...(turnstileToken?{turnstileToken}:{})});
   show('YOUR QUOTE',q.title);
   const token=await api('/token');content.append(element('p',amount(q.amount,token.decimals)+' $HMD'));
+  if(q.pricing){
+   content.append(element('p','NORMAL MARKET ESTIMATE / $'+q.pricing.marketPriceUsd+' USD'));
+   content.append(element('p','HIVE PRICE / $'+q.pricing.chargedPriceUsd+' USD / '+(q.pricing.marketPercentageBps/100)+'% OF MARKET'));
+   content.append(element('p','DIFFICULTY / '+q.pricing.complexity+' / '+q.pricing.estimatedHours+' MARKET HOURS @ $'+q.pricing.marketRateUsd+'/HR'));
+   content.append(element('p','$HMD RATE / $'+q.pricing.tokenPriceUsd+' / LIQUIDITY $'+q.pricing.tokenLiquidityUsd.toLocaleString()));
+   content.append(element('p','MARKET CHECK / '+q.pricing.sources.length+' CURRENT SOURCES'));
+   for(const source of q.pricing.sources){const row=element('p'),link=element('a',source.title+' ↗');link.href=source.url;link.target='_blank';link.rel='noopener noreferrer';row.append(link);content.append(row);}
+   content.append(element('p','QUOTE LOCKED UNTIL / '+new Date(q.pricing.expiresAt).toLocaleTimeString()));
+  }
   content.append(element('p','DELIVERY DEADLINE / '+q.deadlineHours+' HOURS AFTER PAYMENT'));
   for(const t of q.plan.tasks)content.append(element('p',t.title));
   content.append(element('p','Review the $HMD amount and network fee in your wallet. No payment is made until you approve.'));

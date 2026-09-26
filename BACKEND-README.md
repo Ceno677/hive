@@ -21,7 +21,7 @@ npm start
 
 Open http://localhost:4320. The API serves your existing site and its assets. For hot reload use npm run dev. In another terminal run npm run scheduler. Set ARTIFACT_STORAGE=local for local development (already present in .env.example). Production uses private S3-compatible storage and must not use local disk.
 
-The default configuration deliberately has no token addresses, mint price, job price, fee allocation, signer or AI credentials. The website reports unavailable actions until those integrations are configured; it never invents activity or charges.
+The default configuration deliberately has no token addresses, mint price, fee allocation, signer or AI credentials. Job quotes are generated from the scoped plan and live HMD market data; the website reports unavailable actions until those integrations are configured and never invents a token price.
 
 ## Services and source
 
@@ -42,7 +42,7 @@ Use `PAYMENT_MODE=custodial` and supply real launch values in .env:
 
 - SOLANA_RPC_URL, SOLANA_CLUSTER and HMD_MINT. No HIVE_PROGRAM_ID is required in custodial mode.
 - SEAT_COLLECTION_ADDRESS, MINT_BASE_URI and HMD_BURN_AMOUNT. MAX_SEATS_PER_WALLET defaults to 2 and is enforced in serializable database reservations.
-- HMD_JOB_AMOUNT, BUILDER_BPS, VERIFIER_BPS, TREASURY_WALLET.
+- BUILDER_BPS, VERIFIER_BPS and TREASURY_WALLET. Dynamic quote policy uses current sourced market rates, JOB_PRICE_MARKET_BPS (5000 = 50%), price bounds, quote TTL and HMD liquidity/deviation gates.
 - CUSTODY_KEYPAIR_PATH on the trusted service host only. Its public key must equal TREASURY_WALLET and it must remain the collection update authority for launch minting.
 - AI_API_KEY plus either AI_MODEL or every role-specific model, and provider/base URL. OpenAI Responses/Chat and Anthropic adapters are available.
 - EXECUTION_ENABLED=true after building/testing the execution image.

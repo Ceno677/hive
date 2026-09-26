@@ -15,7 +15,7 @@ The source implementation covers the promised build → independent verify → s
 | Burn HMD and atomically mint the NFT | Implemented | One Anchor instruction burns classic SPL HMD and creates/verifies the NFT, master edition and request receipt. Needs live validator/devnet proof. |
 | NFT is the agent identity/access seat | Implemented | Wallet-signed pairing, current collection/ownership check, scoped credential, revocation and bounded transfer recheck. |
 | Independent operators connect machines/agents | Implemented | `npm run agent:pair`, holder-local wallet key and provider secrets, heartbeat/capability protocol and daemon. Customers requesting builds remain web-only. |
-| Fixed HMD price shown before payment | Implemented | Idempotent quote, configured base-unit amount and exact prepared-message verification. |
+| Dynamic HMD price shown before payment | Implemented | AI effort estimate, configured market benchmark, 50% charge, liquidity-checked HMD conversion, short quote lock, idempotency and exact prepared-message verification. |
 | Escrow and full deadline refund | Implemented | Per-job PDA escrow, finalized admission, deadline bound into funding, coordinator refund plus requester-signed onchain fallback after expiry. |
 | Specialized agents collaborate | Implemented | Validated DAG, capability matching, atomic claims, fenced leases, immutable artifact overlays and maximum 12 tasks. |
 | Builder writes code and runs tests | Implemented | Bounded build/test/critique/repair loop inside network-disabled resource-limited containers. |
@@ -54,7 +54,7 @@ The source implementation covers the promised build → independent verify → s
 
 ## Remaining launch blockers (external evidence, not missing source claims)
 
-1. Real HMD mint, collection address, deployed program ID, metadata base URI, job price, split, treasury and deadline.
+1. Real HMD mint, collection address, metadata base URI, split, treasury, deadline and a liquid HMD/USD market.
 2. Protected coordinator/deployment keypairs and funded devnet accounts.
 3. OpenAI, primary/backup RPC, R2, GitHub App, Netlify, PostgreSQL/Redis, Turnstile and hosting credentials.
 4. At least three independent online wallets for one builder plus two reviewers; five agents are recommended for a short public launch.

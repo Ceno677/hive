@@ -13,21 +13,30 @@ const schema = z.object({
   SOLANA_CLUSTER: z.enum(['localnet','devnet','mainnet-beta']).default('devnet'),
   PAYMENT_MODE: z.enum(['custodial','custom-program']).default('custodial'),
   HMD_MINT: optional, SEAT_COLLECTION_ADDRESS: optional, HIVE_PROGRAM_ID: optional,
-  HMD_BURN_AMOUNT: optional, HMD_JOB_AMOUNT: optional, MINT_BASE_URI: optional,
+  HMD_BURN_AMOUNT: optional, MINT_BASE_URI: optional,
   BUILDER_BPS: optional, VERIFIER_BPS: optional, TREASURY_WALLET: optional,
   MAX_SEATS_PER_WALLET: z.preprocess(v => v === '' || v === undefined ? '2' : v, z.string().regex(/^[1-9][0-9]{0,2}$/).refine(v=>Number(v)<=888)), SIGNER_KEYPAIR_PATH: optional,
   CUSTODY_KEYPAIR_PATH: optional, CUSTODY_KEYPAIR_SECRET: optional,
   SETTLEMENT_POLICY: optional, GAS_POLICY: optional,
   JOB_DEADLINE_HOURS: z.preprocess(v=>v===''?undefined:v,z.coerce.number().int().min(1).max(168).optional()),
+  JOB_PRICE_MARKET_BPS: z.coerce.number().int().min(1).max(10000).default(5000),
+  JOB_MIN_PRICE_USD: z.coerce.number().int().min(1).max(100000).default(25),
+  JOB_MAX_PRICE_USD: z.coerce.number().int().min(1).max(1000000).default(10000),
+  JOB_QUOTE_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(300),
+  HMD_PRICE_MIN_LIQUIDITY_USD: z.coerce.number().int().min(100).max(1000000000).default(10000),
+  HMD_PRICE_MAX_DEVIATION_BPS: z.coerce.number().int().min(100).max(10000).default(1500),
+  HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS: z.coerce.number().int().min(10).max(5000).default(500),
+  HMD_PRICE_CACHE_SECONDS: z.coerce.number().int().min(5).max(120).default(20),
   AI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
   AI_API_KEY: optional, AI_MODEL: optional,
-  AI_PLANNER_MODEL: optional, AI_BUILDER_MODEL: optional, AI_REVIEWER_MODEL: optional, AI_FINAL_MODEL: optional,
+  AI_PLANNER_MODEL: optional, AI_PRICING_MODEL: optional, AI_BUILDER_MODEL: optional, AI_REVIEWER_MODEL: optional, AI_FINAL_MODEL: optional,
   AI_API_STYLE: z.enum(['responses','chat-completions']).default('responses'),
   AI_REQUEST_TIMEOUT_MS: z.coerce.number().int().min(30000).max(600000).default(300000),
   AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1024).max(65536).default(32768),
   AI_MAX_INPUT_CHARS: z.coerce.number().int().min(50000).max(2000000).default(600000),
   AI_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(3),
   AI_REASONING_EFFORT: z.enum(['none','low','medium','high','xhigh']).default('high'),
+  AI_PRICING_REASONING_EFFORT: z.enum(['none','low','medium','high','xhigh']).default('low'),
   AI_SERVICE_TIER: z.enum(['auto','default','priority']).default('default'),
   AGENT_REPAIR_PASSES: z.coerce.number().int().min(1).max(8).default(4),
   REVIEW_QUORUM: z.coerce.number().int().min(1).max(3).default(2),
@@ -62,7 +71,7 @@ const schema = z.object({
 export type Config = z.infer<typeof schema>;
 export function config(env: NodeJS.ProcessEnv = process.env): Config {
   const c = schema.parse(env);
-  for(const k of ['HMD_BURN_AMOUNT','HMD_JOB_AMOUNT'] as const)if(c[k]&&(!/^[1-9][0-9]{0,19}$/.test(c[k])||BigInt(c[k])>18446744073709551615n))throw Error(k+' must be positive u64 token base units');
+  if(c.HMD_BURN_AMOUNT&&(!/^[1-9][0-9]{0,19}$/.test(c.HMD_BURN_AMOUNT)||BigInt(c.HMD_BURN_AMOUNT)>18446744073709551615n))throw Error('HMD_BURN_AMOUNT must be positive u64 token base units');
   if(c.BUILDER_BPS&&c.VERIFIER_BPS&&(!/^[0-9]+$/.test(c.BUILDER_BPS)||!/^[0-9]+$/.test(c.VERIFIER_BPS)||Number(c.BUILDER_BPS)+Number(c.VERIFIER_BPS)>10000))throw Error('Invalid fee allocation');
   if(c.SETTLEMENT_POLICY&&c.SETTLEMENT_POLICY!=='final-release')throw Error('Supported settlement policy: final-release');
   if(c.GAS_POLICY&&c.GAS_POLICY!=='user-pays')throw Error('Supported gas policy: user-pays');
@@ -72,6 +81,7 @@ export function config(env: NodeJS.ProcessEnv = process.env): Config {
   if(c.EXECUTION_TOKEN&&c.EXECUTION_TOKEN.length<32)throw new Error('EXECUTION_TOKEN must contain at least 32 characters');
   if(c.HOLDER_DISTRIBUTIONS_ENABLED==='true'&&c.PAYMENT_MODE!=='custodial')throw new Error('Holder distributions currently require custodial payment mode');
   if(Boolean(c.GITHUB_CLIENT_ID)!==Boolean(c.GITHUB_CLIENT_SECRET))throw new Error('GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured together');
+  if(c.JOB_MIN_PRICE_USD>c.JOB_MAX_PRICE_USD)throw new Error('JOB_MIN_PRICE_USD must not exceed JOB_MAX_PRICE_USD');
   if (c.NODE_ENV === 'production') {
     const invalid=[
       !c.PUBLIC_ORIGIN.startsWith('https:')&&'HTTPS PUBLIC_ORIGIN',
@@ -91,7 +101,7 @@ export type ModelRoleName=typeof modelRoles[number];
 export function missingModels(c:Config,roles:readonly ModelRoleName[]=modelRoles){
   return roles.filter(role=>!c[`AI_${role}_MODEL`]&&!c.AI_MODEL).map(role=>'AI_'+role+'_MODEL');
 }
-const paymentBase: (keyof Config)[] = ['HMD_MINT','HMD_JOB_AMOUNT','BUILDER_BPS','VERIFIER_BPS','TREASURY_WALLET','SETTLEMENT_POLICY','GAS_POLICY','JOB_DEADLINE_HOURS'];
+const paymentBase: (keyof Config)[] = ['HMD_MINT','BUILDER_BPS','VERIFIER_BPS','TREASURY_WALLET','SETTLEMENT_POLICY','GAS_POLICY','JOB_DEADLINE_HOURS'];
 const mintBase: (keyof Config)[] = ['HMD_MINT','HMD_BURN_AMOUNT','SEAT_COLLECTION_ADDRESS','MINT_BASE_URI','MAX_SEATS_PER_WALLET','GAS_POLICY'];
 const custodyKey=(c:Config):keyof Config=>c.CUSTODY_KEYPAIR_SECRET?'CUSTODY_KEYPAIR_SECRET':'CUSTODY_KEYPAIR_PATH';
 const githubKey=(c:Config):keyof Config=>c.GITHUB_APP_PRIVATE_KEY?'GITHUB_APP_PRIVATE_KEY':'GITHUB_APP_PRIVATE_KEY_PATH';

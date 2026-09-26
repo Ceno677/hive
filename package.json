@@ -44,7 +44,8 @@
     "protocol:initialize": "tsx infra/scripts/initialize-protocol.ts",
     "protocol:collection:delegate": "tsx infra/scripts/delegate-collection.ts",
     "protocol:pause": "tsx infra/scripts/set-protocol-pause.ts",
-    "launch:check": "tsx infra/scripts/launch-check.ts"
+    "launch:check": "tsx infra/scripts/launch-check.ts",
+    "pricing:smoke": "tsx infra/scripts/test-pricing-model.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",

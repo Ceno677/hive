@@ -17,7 +17,7 @@
 
 1. Set `HMD_MINT` to the real classic SPL token address.
 2. Run `npm run nft:bind-hmd`; it reads live decimals and calculates the raw amount for exactly 8,888 HMD.
-3. Choose the fixed job price in HMD and set `HMD_JOB_AMOUNT` in raw base units.
+3. Confirm the dynamic quote policy. The backend estimates normal human market effort, charges 50%, and converts that USD value to HMD using liquidity-checked live market data.
 4. Confirm or change the provisional `7000 / 1500 / 1500` builder / verifier / treasury basis-point allocation.
 5. Fund the custody token account with only the operational HMD needed for refunds/payouts, then run one credentialed mint and one complete payment/refund smoke test before public intake.
 

@@ -5,6 +5,7 @@ import type {Chain} from '../solana/chain.js';
 import type {ArtifactStore} from '../artifacts/store.js';
 import type {Config} from '../shared/config.js';
 import {scan} from '../verification/scan.js';
+import type {JobPricing} from '../pricing/quote.js';
 const live=['CLAIMED','RUNNING'];
 export class Engine {
  constructor(public db:PrismaClient,public chain:Chain,public store:ArtifactStore,public c:Config){}
@@ -33,15 +34,15 @@ export class Engine {
   },this.db);
   return{id:worker.id,token,expiresAt:worker.expiresAt};
  }
- async create(wallet:string,key:string,prompt:string,raw:unknown,isPublic:boolean,amount:string,builderBps:number,verifierBps:number,treasury:string,deadlineHours:number,mode='BUILD',deploymentTarget?:string){
+ async create(wallet:string,key:string,prompt:string,raw:unknown,isPublic:boolean,amount:string,builderBps:number,verifierBps:number,treasury:string,deadlineHours:number,mode='BUILD',deploymentTarget?:string,pricing?:JobPricing){
   if(!Number.isInteger(deadlineHours)||deadlineHours<1||deadlineHours>168)throw new Fault(503,'invalid_job_deadline');
   const base=validatePlan(raw),plan=deploymentTarget?{...base,tasks:base.tasks.map(t=>({...t,instructions:t.instructions+'\nRequired deployment program address: '+deploymentTarget+'. Use it exactly in declare_id, Anchor.toml and the generated IDL.'}))}:base;
-  const inputHash=hash({prompt,plan,isPublic,amount,builderBps,verifierBps,treasury,deadlineHours,mode,deploymentTarget});
+  const inputHash=hash({prompt,plan,isPublic,amount,builderBps,verifierBps,treasury,deadlineHours,mode,deploymentTarget,pricing});
   split(BigInt(amount),builderBps,verifierBps);
   return serial(async tx=>{
    const old=await tx.workflow.findUnique({where:{wallet_requestKey:{wallet,requestKey:key}}});
-   if(old){if(old.inputHash!==inputHash)throw new Fault(409,'request_key_conflict');return old;}
-   const workflow=await tx.workflow.create({data:{wallet,requestKey:key,inputHash,prompt,title:plan.title,public:isPublic,plan:plan as unknown as Prisma.InputJsonValue,planHash:hash({plan,mode,deploymentTarget}),mode,stage:mode==='SOLANA_APP'?'PROGRAM':'BUILD',deploymentTarget,amount,builderBps,verifierBps,treasury,deadlineHours,status:'QUOTED',expiresAt:new Date(Date.now()+600000)}});
+   if(old){if(old.prompt!==prompt||old.public!==isPublic||old.mode!==mode)throw new Fault(409,'request_key_conflict');return old;}
+   const workflow=await tx.workflow.create({data:{wallet,requestKey:key,inputHash,prompt,title:plan.title,public:isPublic,plan:plan as unknown as Prisma.InputJsonValue,planHash:hash({plan,mode,deploymentTarget}),pricing:pricing as unknown as Prisma.InputJsonValue|undefined,mode,stage:mode==='SOLANA_APP'?'PROGRAM':'BUILD',deploymentTarget,amount,builderBps,verifierBps,treasury,deadlineHours,status:'QUOTED',expiresAt:pricing?new Date(pricing.expiresAt):new Date(Date.now()+600000)}});
    for(const t of plan.tasks)await tx.task.create({data:{workflowId:workflow.id,key:t.key,title:t.title,instructions:t.instructions,skill:t.skill,requiredSkills:[...skills[t.skill].requiredSkills],policy:{paths:t.paths,acceptance:t.acceptance,version:1,command:[...skills[t.skill].command]}}});
    const tasks=await tx.task.findMany({where:{workflowId:workflow.id}});
    for(const t of plan.tasks)for(const parent of t.dependencies)await tx.dependency.create({data:{taskId:tasks.find(x=>x.key===t.key)!.id,parentId:tasks.find(x=>x.key===parent)!.id}});

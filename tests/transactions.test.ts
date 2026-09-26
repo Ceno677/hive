@@ -25,9 +25,10 @@ it('rejects unsigned approvals',()=>{
 it('does not invent a production settlement policy',()=>expect(config({NODE_ENV:'test'}).SETTLEMENT_POLICY).toBeUndefined());
 it('rejects invalid monetary configuration',()=>{
  expect(()=>config({HMD_BURN_AMOUNT:'1.5'})).toThrow();
- expect(()=>config({HMD_JOB_AMOUNT:'18446744073709551616'})).toThrow();
+ expect(()=>config({JOB_MIN_PRICE_USD:'100',JOB_MAX_PRICE_USD:'50'})).toThrow();
  expect(()=>config({BUILDER_BPS:'9000',VERIFIER_BPS:'1500'})).toThrow();
 });
+it('charges half of the estimated market price by default',()=>expect(config({NODE_ENV:'test'}).JOB_PRICE_MARKET_BPS).toBe(5000));
 it('uses the low-cost custodial integration without requiring a custom program',()=>{
  const c=config({NODE_ENV:'test',PAYMENT_MODE:'custodial'});
  expect(createChain(c)).toBeInstanceOf(CustodialSolanaChain);

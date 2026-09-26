@@ -1,23 +1,26 @@
 import type {Config} from '../shared/config.js';
 import {Fault,validatePlan} from '../shared/domain.js';
 import {randomUUID} from 'node:crypto';
-export interface Model { json(system:string, prompt:string):Promise<unknown> }
-export type ModelRole='PLANNER'|'BUILDER'|'REVIEWER'|'FINAL';
-export function modelConfig(c:Config,role:ModelRole):Config{return {...c,AI_MODEL:c[`AI_${role}_MODEL`]??c.AI_MODEL};}
+export type ModelOptions={webSearch?:boolean;jsonSchema?:{name:string;schema:Record<string,unknown>}};
+export interface Model { json(system:string, prompt:string,options?:ModelOptions):Promise<unknown> }
+export type ModelRole='PLANNER'|'PRICING'|'BUILDER'|'REVIEWER'|'FINAL';
+export function modelConfig(c:Config,role:ModelRole):Config{return {...c,AI_MODEL:role==='PRICING'?(c.AI_PRICING_MODEL??'gpt-6-luna'):(c[`AI_${role}_MODEL`]??c.AI_MODEL),AI_REASONING_EFFORT:role==='PRICING'?c.AI_PRICING_REASONING_EFFORT:c.AI_REASONING_EFFORT};}
 export class HttpModel implements Model {
  constructor(private c:Config){}
- async json(system:string,prompt:string):Promise<unknown>{
+ async json(system:string,prompt:string,options?:ModelOptions):Promise<unknown>{
   if(!this.c.AI_API_KEY||!this.c.AI_MODEL)throw new Fault(503,'ai_not_configured');
   if(system.length+prompt.length>this.c.AI_MAX_INPUT_CHARS)throw new Fault(413,'model_input_limit','Model input exceeds the configured cost/context boundary');
   const anthropic=this.c.AI_PROVIDER==='anthropic';
   const responses=!anthropic&&this.c.AI_API_STYLE==='responses';
+  if(options?.webSearch&&!responses)throw new Fault(503,'pricing_web_search_unsupported','Pricing market research requires the OpenAI Responses API');
   const endpoint=this.c.AI_BASE_URL.replace(/\/$/,'')+(anthropic?'/messages':responses?'/responses':'/chat/completions');
   const requestId=randomUUID();
+  const format=options?.jsonSchema?{type:'json_schema',name:options.jsonSchema.name,strict:true,schema:options.jsonSchema.schema}:{type:'json_object'};
   const body=anthropic
    ?{model:this.c.AI_MODEL,max_tokens:this.c.AI_MAX_OUTPUT_TOKENS,system,messages:[{role:'user',content:prompt}]}
    :responses
-    ?{model:this.c.AI_MODEL,max_output_tokens:this.c.AI_MAX_OUTPUT_TOKENS,service_tier:this.c.AI_SERVICE_TIER,reasoning:{effort:this.c.AI_REASONING_EFFORT},store:false,input:[{role:'system',content:system},{role:'user',content:prompt}],text:{format:{type:'json_object'}}}
-    :{model:this.c.AI_MODEL,max_completion_tokens:this.c.AI_MAX_OUTPUT_TOKENS,service_tier:this.c.AI_SERVICE_TIER,reasoning_effort:this.c.AI_REASONING_EFFORT,response_format:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:prompt}]};
+    ?{model:this.c.AI_MODEL,max_output_tokens:this.c.AI_MAX_OUTPUT_TOKENS,service_tier:this.c.AI_SERVICE_TIER,reasoning:{effort:this.c.AI_REASONING_EFFORT},store:false,input:[{role:'system',content:system},{role:'user',content:prompt}],text:{format},...(options?.webSearch?{tools:[{type:'web_search',search_context_size:'low'}],tool_choice:'required',include:['web_search_call.action.sources']}:{})}
+    :{model:this.c.AI_MODEL,max_completion_tokens:this.c.AI_MAX_OUTPUT_TOKENS,service_tier:this.c.AI_SERVICE_TIER,reasoning_effort:this.c.AI_REASONING_EFFORT,response_format:options?.jsonSchema?{type:'json_schema',json_schema:{name:options.jsonSchema.name,strict:true,schema:options.jsonSchema.schema}}:{type:'json_object'},messages:[{role:'system',content:system},{role:'user',content:prompt}]};
   let response:Response|undefined,last:unknown;
   for(let attempt=0;attempt<=this.c.AI_MAX_RETRIES;attempt++){
    try{
@@ -47,7 +50,19 @@ export class HttpModel implements Model {
    :responses
     ?data.output_text??data.output?.flatMap((x:any)=>x.content??[]).find((x:any)=>x.type==='output_text')?.text
     :data.choices?.[0]?.message?.content;
-  try{return JSON.parse(text);}catch{throw new Fault(502,'model_invalid_json','Model returned invalid JSON',{requestId});}
+  try{
+   const parsed=JSON.parse(text);
+   if(options?.webSearch&&parsed&&typeof parsed==='object'){
+    const found=new Map<string,string>();
+    for(const item of data.output??[]){
+     for(const source of item?.action?.sources??[]){if(typeof source?.url==='string'&&/^https?:\/\//.test(source.url))found.set(source.url,String(source.title??new URL(source.url).hostname));}
+     for(const content of item?.content??[])for(const annotation of content?.annotations??[]){const citation=annotation?.url_citation??annotation;if(typeof citation?.url==='string'&&/^https?:\/\//.test(citation.url))found.set(citation.url,String(citation.title??new URL(citation.url).hostname));}
+    }
+    if(!found.size)throw new Fault(502,'pricing_search_no_sources','Market research returned no verifiable sources',{requestId});
+    parsed.sources=[...found].slice(0,5).map(([url,title])=>({title,url}));
+   }
+   return parsed;
+  }catch(error){if(error instanceof Fault)throw error;throw new Fault(502,'model_invalid_json','Model returned invalid JSON',{requestId});}
  }
 }
 export async function plan(model:Model,prompt:string,mode='BUILD',deploymentTarget?:string){
