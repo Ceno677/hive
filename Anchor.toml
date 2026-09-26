@@ -1,0 +1,11 @@
+[toolchain]
+anchor_version = "0.31.1"
+[features]
+resolution = true
+[programs.localnet]
+hive = "4SGFNSivie3gNeLqT7jiixbJDznHzN9pgtkHbhkoVHNy"
+[provider]
+cluster = "Localnet"
+wallet = ".hive/operator.json"
+[scripts]
+test = "npm run test:program"

@@ -1,0 +1,1 @@
+ALTER TABLE "Worker" ADD COLUMN "verifyRejected" INTEGER NOT NULL DEFAULT 0;

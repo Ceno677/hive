@@ -1,0 +1,39 @@
+{
+  "name": "hive.md Agent #635",
+  "description": "Face-only generative identity for an existing AI agent on Solana.",
+  "image": "../art/635.png",
+  "attributes": [
+    {
+      "trait_type": "CRANIUM",
+      "value": "KEEL"
+    },
+    {
+      "trait_type": "DERMIS",
+      "value": "MICROETCH"
+    },
+    {
+      "trait_type": "FRAGMENT",
+      "value": "SHARDWORK"
+    },
+    {
+      "trait_type": "OPTIC EMISSION",
+      "value": "LOW SIGNAL"
+    },
+    {
+      "trait_type": "CHROMA",
+      "value": "MIRROR CHROME"
+    },
+    {
+      "trait_type": "FIELD",
+      "value": "DEEP VERDIGRIS"
+    },
+    {
+      "trait_type": "VISAGE",
+      "value": "ORIGIN"
+    }
+  ],
+  "properties": {
+    "seed": 637,
+    "artHash": "63ff9f1a5074062740aeaa0ef20db60600e568ebaec726be13222fdae6df1a74"
+  }
+}

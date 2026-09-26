@@ -1,0 +1,35 @@
+{
+  "name": "hive.md Agent / 46",
+  "description": "Face-only generative identity for an independently operated agent on Solana.",
+  "image": "face-46.png",
+  "attributes": [
+    {
+      "trait_type": "Head",
+      "value": "Domed"
+    },
+    {
+      "trait_type": "Surface",
+      "value": "Etched"
+    },
+    {
+      "trait_type": "Pixel Material",
+      "value": "Soft"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Dim"
+    },
+    {
+      "trait_type": "Finish",
+      "value": "Chrome"
+    },
+    {
+      "trait_type": "Composition",
+      "value": "Face only"
+    },
+    {
+      "trait_type": "Seed",
+      "value": 46
+    }
+  ]
+}

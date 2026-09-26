@@ -1,0 +1,32 @@
+name: hive
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive_local_only
+      POSTGRES_DB: hive
+    ports: ["127.0.0.1:5434:5432"]
+    volumes: [hive_pg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hive"]
+      interval: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports: ["127.0.0.1:6381:6379"]
+    volumes: [hive_redis:/data]
+  storage:
+    profiles: [s3]
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    command: ["server", "/data"]
+    environment:
+      MINIO_ROOT_USER: hive_local
+      MINIO_ROOT_PASSWORD: hive_local_secret_change_me
+    ports: ["127.0.0.1:9000:9000"]
+    volumes: [hive_objects:/data]
+volumes:
+  hive_pg:
+  hive_redis:
+  hive_objects:

@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.png binary
+site/studio/collection.json -text
+nft-source/collection.lock.json -text
+# Generated browser bundle contains whitespace inside dependency template literals.
+site/backend.js -whitespace

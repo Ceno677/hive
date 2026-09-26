@@ -1,0 +1,33 @@
+import {chromium} from '@playwright/test';
+import {mkdir} from 'node:fs/promises';
+import {Keypair} from '@solana/web3.js';
+import nacl from 'tweetnacl';
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors:string[]=[];
+page.on('pageerror',e=>errors.push(e.message));
+const wallet=Keypair.generate();
+await page.exposeFunction('hiveTestSign',(bytes:number[])=>Array.from(nacl.sign.detached(Uint8Array.from(bytes),wallet.secretKey)));
+await page.addInitScript({content:'window.solana={publicKey:{toBase58:()=>'+JSON.stringify(wallet.publicKey.toBase58())+'},async connect(){},async signMessage(bytes){return {signature:Uint8Array.from(await window.hiveTestSign(Array.from(bytes)))}}};'});
+await page.goto('http://localhost:4320/',{waitUntil:'networkidle'});
+await page.locator('#wallet').click();
+try{await page.getByRole('button',{name:'MY BUILDS'}).waitFor({timeout:10000});}
+catch(e){console.error({errors,dialog:await page.locator('#dialog').innerText()});await browser.close();throw e;}
+await page.locator('#close-dialog').click();
+await page.locator('#brief').fill('Build a personal portfolio website with my projects.');
+await page.locator('#job-form').evaluate((form:HTMLFormElement)=>form.requestSubmit());
+await page.getByRole('button',{name:'GET MY QUOTE'}).waitFor();
+await mkdir('.hive',{recursive:true});
+await page.screenshot({path:'.hive/ui-build-dialog.png'});
+await page.getByRole('button',{name:'GET MY QUOTE'}).click();
+await page.getByRole('status').filter({hasText:'not open'}).waitFor();
+await page.locator('#close-dialog').click();
+await page.locator('#theme-toggle').click();
+await page.locator('#brief').fill('agent pls mint');
+await page.locator('#job-form').evaluate((form:HTMLFormElement)=>form.requestSubmit());
+await page.getByRole('status').filter({hasText:'Seat minting is not open yet'}).waitFor();
+await page.screenshot({path:'.hive/ui-mint-dialog.png'});
+await page.setViewportSize({width:390,height:844});
+await page.screenshot({path:'.hive/ui-mobile.png'});
+if(errors.length)throw Error(errors.join('\n'));
+console.log('Browser passed: wallet signature sign-in, existing dialogs, job quote unavailable state, mint unavailable state, theme and mobile; no page errors.');
+await browser.close();

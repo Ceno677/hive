@@ -1,0 +1,10 @@
+node_modules
+.git
+.hive
+site/studio/art
+site/studio/metadata
+site/studio/collection.json
+.env
+.env.*
+target
+coverage

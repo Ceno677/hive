@@ -1,0 +1,7 @@
+FROM node:22-bookworm-slim
+RUN mkdir /runner && chown node:node /runner
+COPY infra/docker/runner.cjs /runner/runner.cjs
+COPY infra/docker/check-static.cjs /runner/check-static.cjs
+USER node
+WORKDIR /work
+ENTRYPOINT ["node", "/runner/runner.cjs"]

@@ -1,0 +1,514 @@
+HIVE.MD - HIGH-QUALITY, CONTROLLED-BUDGET LAUNCH SETUP
+Updated: 2026-09-26
+
+GOAL
+Run public intake for 2-12 hours, create strong builds, keep costs controlled, and keep
+settlement/refund services alive until every accepted job is delivered or refunded.
+
+RECOMMENDED TOTAL BUDGET
+
+Fixed services for the launch month: about $72-$90
+AI usage reserve: start with $200 and add more only if paid job volume requires it
+Estimated total starting budget: about $275-$300, excluding domain, SOL and HMD liquidity
+
+Do not buy $499/month infrastructure at the start. Upgrade only if launch traffic proves
+that the lower tier is insufficient.
+
+===============================================================================
+1. OPENAI API - REQUIRED
+===============================================================================
+
+Purpose:
+- Plan each project
+- Generate and repair code
+- Review completed tasks
+- Validate the assembled final project
+
+Create account/project:
+https://platform.openai.com/
+
+Official model list:
+https://developers.openai.com/api/docs/models
+
+Official pricing:
+https://developers.openai.com/api/docs/pricing
+
+Recommended balanced model configuration:
+
+AI_PROVIDER=openai-compatible
+AI_BASE_URL=https://api.openai.com/v1
+AI_PLANNER_MODEL=gpt-6-astra
+AI_BUILDER_MODEL=gpt-6-sol
+AI_REVIEWER_MODEL=gpt-6-sol
+AI_FINAL_MODEL=gpt-6-astra
+AI_API_STYLE=responses
+AI_REASONING_EFFORT=high
+AI_SERVICE_TIER=default
+AI_REQUEST_TIMEOUT_MS=300000
+AI_MAX_INPUT_CHARS=600000
+AI_MAX_OUTPUT_TOKENS=32768
+AI_MAX_RETRIES=3
+AGENT_REPAIR_PASSES=4
+REVIEW_QUORUM=2
+
+Why this mix:
+- Astra handles the decisions where mistakes affect the entire project: planning and final QA.
+- Sol handles repeated coding and review work at one-fifth of Astra's token price.
+- No cheap/minimum-quality model is used in the paid delivery path.
+
+Current official standard token prices:
+- GPT-6 Astra: $10 / 1M input, $50 / 1M output
+- GPT-6 Sol:   $2 / 1M input,  $10 / 1M output
+
+Model details:
+https://developers.openai.com/api/docs/models/gpt-6-astra
+https://developers.openai.com/api/docs/models/gpt-6-sol
+
+Estimated AI cost per job with this mix (not a guaranteed quote):
+- Small website: $2-$6
+- Normal application: $5-$15
+- Complex or repair-heavy application: $15-$40
+
+Launch funding recommendation:
+- Put $200 of available API budget behind the project.
+- Add alerts around $50, $100 and $150.
+- Enforce an internal maximum AI spend per job before accepting public payment.
+- Do not use Batch or Flex for live customer jobs.
+- Use Standard processing initially. Fast processing roughly doubles model cost and is only
+  needed if observed response latency threatens the deadline.
+
+Status page:
+https://status.openai.com/
+
+SECRET REQUIRED:
+AI_API_KEY
+
+Never put this key in the browser, generated repository, worker sandbox or chat.
+
+===============================================================================
+2. HELIUS SOLANA RPC - REQUIRED
+===============================================================================
+
+Purpose:
+- Read NFTs and HMD balances
+- Prepare and confirm mint, escrow, payout and refund transactions
+- Watch transaction finality
+
+Dashboard:
+https://dashboard.helius.dev/
+
+Pricing:
+https://www.helius.dev/pricing
+
+Recommended starting plan:
+Developer - $49/month
+
+Included at the time this file was written:
+- 10 million credits
+- 50 RPC requests/second
+- 5 sendTransaction requests/second
+- Staked connections
+
+This is sufficient for the job system and a moderate launch. If the 888-NFT mint is expected
+to submit more than five transactions every second for a sustained period, upgrade to Business
+before opening. Business is $499/month and allows 50 sendTransaction requests/second.
+
+Status page:
+https://helius.statuspage.io/
+
+SECRET REQUIRED:
+SOLANA_RPC_URL containing the Helius credential
+
+Do not expose the unrestricted server RPC key in public browser code. Use endpoint restrictions
+or a separately restricted browser endpoint.
+
+===============================================================================
+3. QUICKNODE SOLANA RPC - BACKUP, RECOMMENDED
+===============================================================================
+
+Purpose:
+- Automatic read/confirmation fallback when the primary RPC is degraded or rate limited
+
+Create endpoint:
+https://www.quicknode.com/
+
+Pricing:
+https://www.quicknode.com/pricing
+
+Recommended starting plan:
+Free trial - $0 for the launch test period
+
+The published trial currently includes 10 million credits and 15 requests/second. Upgrade to
+Build ($49/month, 50 requests/second) only if testing or traffic requires it.
+
+Solana documentation:
+https://www.quicknode.com/docs/solana
+
+Endpoint security:
+https://www.quicknode.com/docs/solana/endpoint-security
+
+SECRET REQUIRED:
+SOLANA_BACKUP_RPC_URL
+
+The backend automatically retries Solana connection methods against this endpoint when the
+primary call fails. The launch check probes both endpoints independently.
+
+===============================================================================
+4. GITHUB APP API - REQUIRED FOR DELIVERY
+===============================================================================
+
+Purpose:
+- Let users connect a repository
+- Push the verified artifact to a deterministic delivery branch
+- Record the repository, branch and commit before escrow payout
+
+Create a GitHub App:
+https://docs.github.com/en/apps/creating-github-apps/registering-a-github-app/registering-a-github-app
+
+Authentication documentation:
+https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app
+
+Rate limits:
+https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+
+Cost:
+$0 for the API itself under normal GitHub usage.
+
+Minimum repository permissions:
+- Metadata: read
+- Contents: read and write
+
+Required configuration:
+GITHUB_APP_ID
+GITHUB_INSTALLATION_ID
+GITHUB_APP_PRIVATE_KEY_PATH
+GITHUB_ALLOWED_OWNER
+
+Important:
+The current backend delivers to an existing repository under one configured allowed owner.
+Arbitrary customer-owned repositories require the GitHub App user authorization/callback flow,
+encrypted refresh-token storage, and repository selection UI before launch.
+
+Never paste the GitHub private key into chat or store it inside the web frontend.
+
+===============================================================================
+5. CLOUDFLARE R2 - REQUIRED PRIVATE ARTIFACT STORAGE
+===============================================================================
+
+Purpose:
+- Store generated files privately before GitHub delivery
+- Keep immutable artifact hashes for verification and settlement
+
+Create R2 bucket:
+https://developers.cloudflare.com/r2/get-started/
+
+Pricing:
+https://developers.cloudflare.com/r2/pricing/
+
+Recommended plan:
+R2 Standard
+
+The current free monthly allowance includes 10 GB-month of storage, 1 million Class A
+operations and 10 million Class B operations. A short launch should normally stay free.
+
+Required configuration:
+ARTIFACT_STORAGE=s3
+S3_ENDPOINT=<R2 S3 endpoint>
+S3_REGION=auto
+S3_BUCKET=<private bucket name>
+S3_ACCESS_KEY=<R2 access key>
+S3_SECRET_KEY=<R2 secret key>
+
+The bucket must remain private. Users receive artifacts only through authorized backend routes
+or completed GitHub delivery.
+
+===============================================================================
+6. RAILWAY - REQUIRED MANAGED BACKEND SERVICES
+===============================================================================
+
+Purpose:
+- Run the public API
+- Run the scheduler/reconciliation service
+- Host PostgreSQL
+- Host Redis/BullMQ
+
+Create project:
+https://railway.com/
+
+Pricing documentation:
+https://docs.railway.com/pricing/plans
+
+Recommended plan:
+Pro - $20/month, including $20 of resource usage
+
+Services to create:
+1. API service
+2. Scheduler service
+3. PostgreSQL database
+4. Redis database
+
+For a 12-hour intake window and a short settlement tail, these services should normally fit
+close to the included usage. Do not use Railway's free tier for a paid public launch.
+
+Required configuration supplied by Railway:
+DATABASE_URL
+REDIS_URL
+PUBLIC_ORIGIN
+
+Keep API and scheduler in the same region as PostgreSQL and Redis.
+
+===============================================================================
+7. HETZNER CLOUD WORKER SERVER - REQUIRED
+===============================================================================
+
+Purpose:
+- Run the hosted builder/reviewer processes
+- Run isolated Docker test containers
+- Keep Docker and generated code away from customer devices
+
+Create server:
+https://console.hetzner.cloud/
+
+Product information:
+https://www.hetzner.com/cloud/
+
+Recommended server:
+CCX33 dedicated-resource instance, Ubuntu, EU region
+
+Published Germany/Finland price at the time this file was written:
+$0.2612/hour, with a $162.99 monthly cap, excluding VAT and IPv4
+
+Approximate compute cost:
+- 12 hours: $3.14
+- 24 hours: $6.27
+- 48 hours: $12.54
+
+Pricing reference:
+https://docs.hetzner.com/general/infrastructure-and-availability/price-adjustment/
+
+Run five separately enrolled agent processes:
+- Builder 1
+- Builder 2
+- Reviewer 1
+- Reviewer 2
+- Reviewer 3 / standby
+
+Use five distinct agent identities and preferably five distinct wallets. The NFT cap remains
+two per wallet, but each accepted artifact still requires distinct builder and reviewer wallets.
+
+Limit initial execution to:
+- Two simultaneous build tasks
+- Three simultaneous review tasks
+
+Queue additional work instead of overloading the server. Keep the server alive until the last
+accepted job is delivered or reaches its refund deadline, then delete it to stop hourly billing.
+
+===============================================================================
+8. CLOUDFLARE DNS + TURNSTILE - RECOMMENDED
+===============================================================================
+
+Purpose:
+- HTTPS/DNS proxy and basic DDoS protection
+- Prevent bots from repeatedly triggering expensive AI quote planning
+
+Cloudflare dashboard:
+https://dash.cloudflare.com/
+
+Turnstile setup:
+https://developers.cloudflare.com/turnstile/get-started/
+
+Expected starting cost:
+$0
+
+Required production configuration:
+TURNSTILE_SITE_KEY
+TURNSTILE_SECRET_KEY
+
+Turnstile is integrated into the existing quote dialog using interaction-only rendering. The
+backend checks success, action, hostname and client IP before spending model tokens on a new
+quote. Idempotent retries of an already-created quote do not consume a second token.
+
+===============================================================================
+9. SENTRY - OPTIONAL BUT RECOMMENDED
+===============================================================================
+
+Purpose:
+- Capture API, scheduler and worker errors during the short launch
+- Alert the operator before jobs silently approach their deadline
+
+Create project:
+https://sentry.io/signup/
+
+Documentation:
+https://docs.sentry.io/
+
+Start with the free developer plan. Configure separate environments for staging and production.
+
+Required after integration:
+SENTRY_DSN
+
+===============================================================================
+10. OPENAI IMAGE API - OPTIONAL QUALITY UPGRADE
+===============================================================================
+
+Purpose:
+- Generate original hero art, illustrations and UI assets instead of placeholders
+
+Recommended model:
+gpt-image-2.5-sunburst-2026-09-08
+
+Documentation:
+https://developers.openai.com/api/docs/models/gpt-image-2.5-sunburst
+
+Image guide:
+https://developers.openai.com/api/docs/guides/image-generation
+
+This uses the same OpenAI account. Organization verification may be required. It is not wired
+into the backend yet. Add it only after the core paid build flow passes staging.
+
+===============================================================================
+QUALITY PROCESS FOR EACH PAID JOB
+===============================================================================
+
+1. GPT-6 Astra creates the bounded project plan.
+2. A GPT-6 Sol builder implements one isolated task.
+3. Deterministic tests and security scanning run without network access.
+4. GPT-6 Sol critiques the actual code and test evidence.
+5. Failed work returns to the builder for up to four bounded repair passes.
+6. Two separate NFT-agent wallets independently review each accepted artifact.
+7. Trusted coordinator checks rerun before accepting either review; correct rejections earn
+   verifier reputation and disagreements count against it.
+8. GPT-6 Astra validates the complete assembled project.
+9. The verified artifact is pushed to the connected GitHub repository.
+10. Only then does the custodial ledger pay builders and verifiers and retain the treasury share.
+11. If GitHub delivery misses the disclosed deadline, the scheduler returns the full payment.
+
+For quality, never reduce REVIEW_QUORUM below 2 and never use GPT-6 Luna in the paid decision
+path. If the queue grows, make users wait; do not silently lower the model.
+
+===============================================================================
+RECOMMENDED LAUNCH TIMING
+===============================================================================
+
+- Public intake window: up to 12 hours
+- JOB_DEADLINE_HOURS: 12
+- Close new-job intake before shutting down any worker
+- Continue API, scheduler, database, Redis and workers until every accepted job has completed
+  or passed its refund deadline
+- Keep API/scheduler available longer for settlement records and requester refund preparation
+
+A 12-hour website window does not mean the infrastructure can be deleted after exactly 12
+hours. A job accepted in the last minute still owns its full quoted delivery period.
+
+===============================================================================
+BACKEND STATUS AND REMAINING LIVE GATES
+===============================================================================
+
+Implemented in the backend:
+1. Per-role GPT-6 models plus reasoning effort and Standard/priority service-tier controls.
+2. Five-minute model timeout, bounded exponential retry/backoff and output truncation rejection.
+3. Maximum 12-task plans, four repair passes, 600,000 input characters and 32,768 output tokens.
+4. Provider token-usage logs without prompt/source contents.
+5. Helius-to-QuickNode failover plus independent launch probes.
+6. GitHub App delivery to an existing repository under the configured allowed owner.
+7. Turnstile verification before new model-backed quote generation.
+8. Deadline-warning events/logs, public proof endpoints and worker reputation/pairing controls.
+9. Read-only launch checks for database, agents, chain policy, storage, GitHub, Netlify, models,
+   private-key files and Docker image availability.
+
+Still requires real accounts, configuration and human validation:
+1. Run representative website/app/Solana builds with the paid model key and inspect the output.
+2. Run devnet validator/integration and attack tests for the deployed Anchor program.
+3. Have an independent Solana security reviewer inspect the program and deployment authority.
+4. Test backup/restore, publication recovery and expected launch concurrency.
+5. Set provider-project budget alerts/limits. Logged tokens are not a per-workflow dollar invoice.
+6. If arbitrary customer-owned GitHub installations are required, add that separate OAuth/App
+   installation product flow. The short launch supports repositories available to one configured
+   App installation and allowed owner.
+
+===============================================================================
+WHAT THE OWNER MUST DECIDE OR PROVIDE
+===============================================================================
+
+Safe public/product information:
+- Production domain
+- Mainnet or devnet decision
+- HMD mint public address
+- Fixed job price in whole HMD
+- Builder percentage
+- Verifier percentage
+- Treasury percentage/remainder
+- Treasury public wallet
+- Confirmed job deadline (recommended: 12 hours)
+- GitHub organization/allowed owner
+- Expected maximum simultaneous customer jobs
+- The NFT-holder/operator wallets and seat IDs that will supply launch capacity
+
+Private server configuration - never paste these into chat:
+- OpenAI API key
+- Helius RPC URL/key
+- QuickNode endpoint token
+- GitHub App private key and webhook secret
+- R2 access and secret keys
+- Railway database/Redis credentials
+- Solana signer keypair and wallet seed material
+- DEPLOY_PROGRAM_SEED: a separate 32+ character secret used to derive one stable program
+  address per customer workflow; never expose or reuse it as a wallet seed phrase
+- Worker tokens
+
+===============================================================================
+TREASURY AND NFT-HOLDER PAYMENTS
+===============================================================================
+
+Lean launch mode uses one custody HMD token account plus a durable per-job PostgreSQL subledger.
+After independent verification, final validation and successful GitHub delivery, the exact
+integer amount is paid using BUILDER_BPS and VERIFIER_BPS. The remainder stays in
+TREASURY_WALLET. With two accepted reviewers, the verifier allocation is divided between them.
+
+If delivery misses JOB_DEADLINE_HOURS, no reward has vested and the scheduler returns the full
+payment. Unique signed SPL memos, database ledger rows and durable payout states make retries
+recoverable and idempotent. This is custodial escrow, not a trustless per-job on-chain vault.
+
+The published product promises earnings for NFT holders who actually operate accepted agents.
+It does not promise passive dividends to every holder. The protocol treasury is for operating
+costs and reserves. A future passive-holder distribution would require a separate, explicitly
+approved legal/tax policy and distributor contract; do not market it as implemented.
+
+===============================================================================
+BUY NOW VS WAIT
+===============================================================================
+
+BUY/CREATE NOW:
+- OpenAI paid API project
+- Helius Developer ($49)
+- QuickNode free trial backup ($0)
+- GitHub App ($0)
+- Cloudflare R2 and Turnstile ($0 expected)
+- Railway Pro ($20)
+- Hetzner account; create CCX33 only when staging is ready
+
+WAIT UNTIL TRAFFIC PROVES IT IS NEEDED:
+- Helius Business ($499)
+- QuickNode Build ($49)
+- A second worker VM
+- OpenAI Fast processing
+- OpenAI Image API integration
+- Paid monitoring plan
+
+FINAL EXPECTED STARTING COST
+
+Helius Developer:                         $49
+Railway Pro:                              $20
+Hetzner worker for 12-48 hours:       $3-$13
+QuickNode trial:                           $0
+GitHub App:                                $0
+Cloudflare R2/Turnstile:                   $0 expected
+Sentry:                                    $0 initially
+-------------------------------------------------------------
+Fixed infrastructure estimate:        $72-$82 plus tax/domain
+Recommended initial OpenAI reserve:       $200
+-------------------------------------------------------------
+Recommended launch funding:          about $275-$300
+
+SOL transaction fees, HMD liquidity, domain registration and any post-launch retention are not
+included. Prices can change; verify the linked official pricing pages immediately before purchase.

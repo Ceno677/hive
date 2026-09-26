@@ -1,0 +1,39 @@
+{
+  "name": "hive.md Agent #547",
+  "description": "Face-only generative identity for an existing AI agent on Solana.",
+  "image": "../art/547.png",
+  "attributes": [
+    {
+      "trait_type": "CRANIUM",
+      "value": "BULWARK"
+    },
+    {
+      "trait_type": "DERMIS",
+      "value": "CARBON VEIL"
+    },
+    {
+      "trait_type": "FRAGMENT",
+      "value": "RASTER"
+    },
+    {
+      "trait_type": "OPTIC EMISSION",
+      "value": "LOW SIGNAL"
+    },
+    {
+      "trait_type": "CHROMA",
+      "value": "ION STREAM"
+    },
+    {
+      "trait_type": "FIELD",
+      "value": "OXBLOOD"
+    },
+    {
+      "trait_type": "VISAGE",
+      "value": "HOLLOW ECHO"
+    }
+  ],
+  "properties": {
+    "seed": 548,
+    "artHash": "a8cef29393e9176fbb2c3ce9948a34db5414c1aa7166d535346c7858bee49ac0"
+  }
+}

@@ -1,0 +1,281 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model Wallet {
+  address String @id
+  createdAt DateTime @default(now())
+  sessions Session[]
+  workflows Workflow[]
+  workers Worker[]
+}
+model AuthChallenge {
+  id String @id @default(uuid())
+  wallet String
+  message String
+  expiresAt DateTime
+  consumedAt DateTime?
+  @@index([expiresAt])
+}
+model Session {
+  tokenHash String @id
+  wallet String
+  owner Wallet @relation(fields: [wallet], references: [address])
+  csrfHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  @@index([wallet])
+}
+model Seat {
+  id Int @id
+  mint String? @unique
+  imageHash String
+  metadataUri String?
+  ownerWallet String?
+  checkedAt DateTime?
+  slot BigInt?
+  worker Worker?
+}
+model Worker {
+  id String @id @default(uuid())
+  wallet String
+  owner Wallet @relation(fields: [wallet], references: [address])
+  seatId Int @unique
+  seat Seat @relation(fields: [seatId], references: [id])
+  deviceKey String @unique
+  name String
+  capabilities String[]
+  maxConcurrent Int @default(1)
+  status String @default("OFFLINE")
+  tokenHash String @unique
+  generation Int @default(1)
+  expiresAt DateTime
+  heartbeatAt DateTime @default(now())
+  public Boolean @default(false)
+  attempts Attempt[]
+  buildAccepted Int @default(0)
+  buildRejected Int @default(0)
+  verifyAccepted Int @default(0)
+  verifyRejected Int @default(0)
+  timeouts Int @default(0)
+  @@index([status, heartbeatAt])
+}
+model Workflow {
+  id String @id @default(uuid())
+  wallet String
+  owner Wallet @relation(fields: [wallet], references: [address])
+  requestKey String
+  inputHash String
+  prompt String
+  title String
+  status String @default("PLANNING")
+  mode String @default("BUILD")
+  stage String @default("BUILD")
+  public Boolean @default(false)
+  plan Json?
+  planHash String?
+  failure String?
+  amount String
+  builderBps Int
+  verifierBps Int
+  treasury String
+  expiresAt DateTime
+  deadlineHours Int
+  deadlineAt DateTime?
+  deploymentTarget String? @unique
+  fundedSignature String? @unique
+  escrow String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks Task[]
+  events Event[]
+  artifacts Artifact[]
+  payments ChainOperation[]
+  approvals Approval[]
+  releases Release[]
+  rewards Reward[]
+  @@unique([wallet, requestKey])
+  @@index([status, createdAt])
+  @@index([deadlineAt, status])
+}
+model Task {
+  id String @id @default(uuid())
+  workflowId String
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  key String
+  title String
+  skill String
+  instructions String
+  requiredSkills String[]
+  policy Json
+  state String @default("BLOCKED")
+  generation Int @default(0)
+  buildCount Int @default(0)
+  acceptedArtifact String?
+  dependencies Dependency[] @relation("child")
+  dependents Dependency[] @relation("parent")
+  attempts Attempt[]
+  artifacts Artifact[]
+  @@unique([workflowId, key])
+  @@index([state])
+}
+model Dependency {
+  taskId String
+  parentId String
+  task Task @relation("child", fields: [taskId], references: [id])
+  parent Task @relation("parent", fields: [parentId], references: [id])
+  @@id([taskId, parentId])
+}
+model Attempt {
+  id String @id @default(uuid())
+  taskId String
+  task Task @relation(fields: [taskId], references: [id])
+  workerId String
+  worker Worker @relation(fields: [workerId], references: [id])
+  ownerWallet String
+  seatId Int
+  kind String
+  generation Int
+  state String @default("CLAIMED")
+  leaseUntil DateTime
+  startedAt DateTime @default(now())
+  finishedAt DateTime?
+  submissionHash String?
+  feedback Json?
+  verification Verification?
+  @@unique([taskId, generation])
+  @@index([state, leaseUntil])
+  @@index([workerId, state])
+}
+model Artifact {
+  id String @id @default(uuid())
+  workflowId String
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  taskId String
+  task Task @relation(fields: [taskId], references: [id])
+  attemptId String @unique
+  hash String
+  objectKey String @unique
+  bytes Int
+  accepted Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([workflowId, accepted])
+}
+model Verification {
+  id String @id @default(uuid())
+  attemptId String @unique
+  attempt Attempt @relation(fields: [attemptId], references: [id])
+  artifactHash String
+  decision String
+  checks Json
+  issues Json
+  trustedEvidence Json?
+  state String @default("PENDING_TRUSTED")
+  createdAt DateTime @default(now())
+  @@index([state])
+}
+model Event {
+  seq BigInt @id @default(autoincrement())
+  workflowId String
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  type String
+  data Json
+  createdAt DateTime @default(now())
+  publishedAt DateTime?
+  @@index([publishedAt, seq])
+  @@index([workflowId, seq])
+}
+model ChainOperation {
+  id String @id @default(uuid())
+  workflowId String?
+  workflow Workflow? @relation(fields: [workflowId], references: [id])
+  mintRequestId String?
+  operationKey String @unique
+  kind String
+  state String @default("PREPARED")
+  signature String? @unique
+  transaction String?
+  lastValidBlockHeight Int?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([state])
+}
+model MintRequest {
+  id String @id @default(uuid())
+  wallet String
+  requestKey String
+  inputHash String
+  seatId Int
+  amount String
+  state String @default("QUOTED")
+  expiresAt DateTime
+  signature String? @unique
+  mint String? @unique
+  createdAt DateTime @default(now())
+  @@unique([wallet, requestKey])
+  @@index([seatId, state])
+  @@index([wallet, state, expiresAt])
+}
+model Reward {
+  id String @id @default(uuid())
+  workflowId String
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  beneficiary String
+  kind String
+  amount String
+  receiptHash String
+  state String @default("CLAIMABLE")
+  signature String?
+  @@unique([workflowId, receiptHash, kind])
+  @@index([beneficiary, state])
+}
+model LedgerEntry {
+  id String @id @default(uuid())
+  operationKey String @unique
+  workflowId String
+  kind String
+  amount String
+  beneficiary String?
+  signature String
+  createdAt DateTime @default(now())
+  @@index([workflowId])
+}
+model Approval {
+  id String @id @default(uuid())
+  workflowId String
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  wallet String
+  artifactHash String
+  action String
+  target String
+  cluster String
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  @@index([workflowId, action])
+}
+model Release {
+  id String @id @default(uuid())
+  workflowId String
+  workflow Workflow @relation(fields: [workflowId], references: [id])
+  state String @default("PENDING")
+  kind String
+  target String
+  artifactHash String
+  manifest Json?
+  url String?
+  failure String?
+  createdAt DateTime @default(now())
+  @@unique([workflowId, kind, artifactHash, target])
+}
+model Pairing {
+  builder String
+  verifier String
+  count Int @default(1)
+  lastAt DateTime @default(now())
+  @@id([builder, verifier])
+}

@@ -1,0 +1,93 @@
+{
+  "head": {
+    "label": "CRANIUM",
+    "choices": {
+      "balanced": "PRIME",
+      "longoval": "ELONGATE",
+      "fullcheeks": "PLENUM",
+      "narrow": "NEEDLE",
+      "broadjaw": "BULWARK",
+      "taperedjaw": "KEEL",
+      "highforehead": "CEREBRAL",
+      "softchin": "SOFTCAST",
+      "highcheeks": "RIDGELINE",
+      "gaunt": "REVENANT",
+      "roundface": "LUNAR",
+      "heartface": "VALENT",
+      "pearface": "UNDERTOW",
+      "slenderchin": "FILAMENT",
+      "heavybrow": "OVERHANG",
+      "compact": "KERNEL",
+      "widetemple": "HORIZON",
+      "softlong": "DRIFTER"
+    }
+  },
+  "surface": {
+    "label": "DERMIS",
+    "choices": {
+      "matte": "CARBON VEIL",
+      "etched": "MICROETCH",
+      "plated": "LAMINATE",
+      "circuit": "NEURAL TRACE",
+      "molten": "LIQUID ALLOY"
+    }
+  },
+  "pixelMaterial": {
+    "label": "FRAGMENT",
+    "choices": {
+      "solid": "HARDPOINT",
+      "soft": "SOFT STATIC",
+      "scanline": "RASTER",
+      "mosaic": "SHARDWORK",
+      "neon": "ARC LIGHT"
+    }
+  },
+  "eyes": {
+    "label": "OPTIC EMISSION",
+    "choices": {
+      "dim": "LOW SIGNAL",
+      "glow": "AFTERGLOW",
+      "beam": "PHOTON LANCE",
+      "burning": "CORE IGNITION"
+    }
+  },
+  "colorway": {
+    "label": "CHROMA",
+    "choices": {
+      "chrome": "MIRROR CHROME",
+      "graphite": "GRAPHITE ZERO",
+      "ion": "ION STREAM",
+      "violet": "ULTRAVIOLET",
+      "acid": "ACID CHARGE",
+      "rose": "ROSE PULSE",
+      "copper": "COPPER FLUX",
+      "gold": "AURIC"
+    }
+  },
+  "background": {
+    "label": "FIELD",
+    "choices": {
+      "void": "NULLSPACE",
+      "silver": "SILVER FOG",
+      "cobalt": "COBALT DEPTH",
+      "wine": "OXBLOOD",
+      "forest": "DEEP VERDIGRIS",
+      "orchid": "ORCHID HAZE",
+      "orange": "SIGNAL FLARE",
+      "ice": "CRYOSPHERE"
+    }
+  },
+  "face": {
+    "label": "VISAGE",
+    "choices": {
+      "classic": "ORIGIN",
+      "cyclops": "MONOCULAR",
+      "triple": "TRIAD",
+      "slit": "KNIFE SIGHT",
+      "square": "QUAD LENS",
+      "cross": "CROSSHAIR",
+      "grin": "CHESHIRE",
+      "hollow": "HOLLOW ECHO"
+    }
+  }
+}
