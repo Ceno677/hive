@@ -4,6 +4,9 @@ import {Fault} from '../shared/domain.js';
 import {loadTextSecret} from '../shared/secrets.js';
 
 const headers=(token:string)=>({authorization:'Bearer '+token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'});
+export function githubInstallationUrl(slug:string,state:string){
+ const url=new URL('https://github.com/apps/'+slug+'/installations/new');url.searchParams.set('state',state);return url.toString();
+}
 export async function githubInstallationToken(c:Config,installationId:string){
  if(!c.GITHUB_APP_ID||(!c.GITHUB_APP_PRIVATE_KEY_PATH&&!c.GITHUB_APP_PRIVATE_KEY)||!/^[1-9][0-9]*$/.test(installationId))throw new Fault(503,'github_not_configured');
  const numeric=Number(installationId);if(!Number.isSafeInteger(numeric))throw new Fault(503,'github_installation_invalid');

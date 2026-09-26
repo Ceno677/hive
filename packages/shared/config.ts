@@ -55,7 +55,7 @@ const schema = z.object({
   S3_REGION: z.string().default('us-east-1'), S3_BUCKET: z.string().default('hive-artifacts'),
   S3_ACCESS_KEY: z.string().default('hive_local'), S3_SECRET_KEY: z.string().default('hive_local_secret_change_me'),
   GITHUB_APP_ID: optional, GITHUB_APP_PRIVATE_KEY_PATH: optional, GITHUB_APP_PRIVATE_KEY: optional, GITHUB_INSTALLATION_ID: optional,
-  GITHUB_CLIENT_ID: optional, GITHUB_CLIENT_SECRET: optional,
+  GITHUB_CLIENT_ID: optional, GITHUB_CLIENT_SECRET: optional, GITHUB_APP_SLUG: z.preprocess(v=>v===''?undefined:v,z.string().regex(/^[a-z0-9][a-z0-9-]{0,99}$/).optional()),
   GITHUB_ALLOWED_OWNER: optional,
   NETLIFY_TOKEN: optional, NETLIFY_SITE_ID: optional,
   SOLANA_RELEASES_ENABLED: z.enum(['true','false']).default('false'),
@@ -110,5 +110,5 @@ const githubKey=(c:Config):keyof Config=>c.GITHUB_APP_PRIVATE_KEY?'GITHUB_APP_PR
 export const paymentKeys=(c:Config):(keyof Config)[]=>[...paymentBase,...(c.PAYMENT_MODE==='custodial'?[custodyKey(c)]:['HIVE_PROGRAM_ID' as const,'SIGNER_KEYPAIR_PATH' as const])];
 export const mintKeys=(c:Config):(keyof Config)[]=>[...mintBase,...(c.PAYMENT_MODE==='custodial'?[custodyKey(c)]:['HIVE_PROGRAM_ID' as const])];
 export const deliveryKeys=(c:Config):(keyof Config)[]=>c.GITHUB_CLIENT_ID&&c.GITHUB_CLIENT_SECRET
- ? ['GITHUB_APP_ID',githubKey(c),'GITHUB_CLIENT_ID','GITHUB_CLIENT_SECRET']
+ ? ['GITHUB_APP_ID',githubKey(c),'GITHUB_CLIENT_ID','GITHUB_CLIENT_SECRET','GITHUB_APP_SLUG']
  : ['GITHUB_APP_ID',githubKey(c),'GITHUB_INSTALLATION_ID','GITHUB_ALLOWED_OWNER'];

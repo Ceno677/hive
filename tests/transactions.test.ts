@@ -36,8 +36,8 @@ it('uses the low-cost custodial integration without requiring a custom program',
  expect(paymentKeys(c)).toContain('CUSTODY_KEYPAIR_PATH');expect(paymentKeys(c)).not.toContain('SIGNER_KEYPAIR_PATH');
 });
 it('supports customer GitHub installations without a single allowed owner',()=>{
- const c=config({NODE_ENV:'test',GITHUB_CLIENT_ID:'Iv1.test',GITHUB_CLIENT_SECRET:'secret'});
- expect(deliveryKeys(c)).toContain('GITHUB_CLIENT_ID');expect(deliveryKeys(c)).not.toContain('GITHUB_INSTALLATION_ID');
+ const c=config({NODE_ENV:'test',GITHUB_CLIENT_ID:'Iv1.test',GITHUB_CLIENT_SECRET:'secret',GITHUB_APP_SLUG:'hive-delivery'});
+ expect(deliveryKeys(c)).toContain('GITHUB_CLIENT_ID');expect(deliveryKeys(c)).toContain('GITHUB_APP_SLUG');expect(deliveryKeys(c)).not.toContain('GITHUB_INSTALLATION_ID');
 });
 it('encodes official SPL idempotent ATA, transfer-checked and burn-checked instructions',()=>{
  const payer=wallet.publicKey,mint=Keypair.generate().publicKey,recipient=Keypair.generate().publicKey;

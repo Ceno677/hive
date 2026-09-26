@@ -23,7 +23,7 @@ import {deliveryRoutes} from './delivery.js';
 import {observe} from './observability.js';
 import {requestSchemas} from '../../packages/shared/http-schemas.js';
 import {deploymentAddress} from '../../packages/delivery/solana-deploy.js';
-import {exchangeGitHubConnection} from '../../packages/delivery/github.js';
+import {exchangeGitHubConnection,githubInstallationUrl} from '../../packages/delivery/github.js';
 import {createJobPricing} from '../../packages/pricing/quote.js';
 const uuid=z.string().uuid(),idOf=(r:FastifyRequest)=>uuid.parse((r.params as any).id);
 export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:ArtifactStore;model:Model;pricingModel?:Model;serveStatic?:boolean;logger?:boolean}){
@@ -204,15 +204,13 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
  });
  app.post('/api/github/connect',{config:{rateLimit:{max:5,timeWindow:'1 minute'}}},async r=>{
   const owner=await wallet(r);
-  if(!c.GITHUB_CLIENT_ID||!c.GITHUB_CLIENT_SECRET)throw new Fault(503,'github_oauth_not_configured');
+  if(!c.GITHUB_CLIENT_ID||!c.GITHUB_CLIENT_SECRET||!c.GITHUB_APP_SLUG)throw new Fault(503,'github_oauth_not_configured');
   const state=secret();
   await db.$transaction([
    db.gitHubConnectState.deleteMany({where:{expiresAt:{lte:new Date()}}}),
    db.gitHubConnectState.create({data:{stateHash:digest(state),wallet:owner,expiresAt:new Date(Date.now()+600000)}})
   ]);
-  const url=new URL('https://github.com/login/oauth/authorize');
-  url.searchParams.set('client_id',c.GITHUB_CLIENT_ID);url.searchParams.set('redirect_uri',new URL('/api/github/callback',c.PUBLIC_ORIGIN).toString());url.searchParams.set('state',state);
-  return{url:url.toString()};
+  return{url:githubInstallationUrl(c.GITHUB_APP_SLUG,state)};
  });
  app.get('/api/github/callback',async(r,reply)=>{
   const query=z.object({code:z.string().min(8).max(500),state:z.string().min(32).max(100)}).parse(r.query);
