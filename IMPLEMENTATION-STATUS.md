@@ -24,7 +24,7 @@ This repository contains the backend and web integration, with the API and sched
 ## Verified here
 
 - TypeScript checking and frontend/collection verification.
-- The local gate passes 51 tests. An isolated temporary Railway PostgreSQL database applied all nine migrations and passed 71 tests across readiness dependencies, domain rules, public-proof privacy, agent quality controls, two-reviewer quorum and reward division, delivery-gated payout, deadline refund, transactions and orchestration. Three container-only tests remain skipped without a Docker host.
+- The local gate passes 52 tests. An isolated temporary Railway PostgreSQL database applied all nine migrations and passed 71 tests across readiness dependencies, domain rules, public-proof privacy, agent quality controls, two-reviewer quorum and reward division, delivery-gated payout, deadline refund, transactions and orchestration. Three container-only tests remain skipped without a Docker host.
 - Real Ed25519 authentication, replay/CSRF rejection, simultaneous task claims, stale lease rejection, independent review, retry after failed trusted checks, final reward conservation, ownership revocation and privacy.
 - Cancellation during pending funding, recovery of direct wallet broadcasts, finalized-height expiry and confirmation of issuance after an NFT transfer.
 - Configurable planner/builder/reviewer/final model routing, bounded test-and-critique repairs, preserved repair patches and trusted rejection details passed back to builders. These are tested controls, not a claim that actual model output has passed a quality benchmark.
