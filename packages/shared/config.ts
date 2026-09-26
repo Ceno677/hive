@@ -45,6 +45,7 @@ const schema = z.object({
   S3_REGION: z.string().default('us-east-1'), S3_BUCKET: z.string().default('hive-artifacts'),
   S3_ACCESS_KEY: z.string().default('hive_local'), S3_SECRET_KEY: z.string().default('hive_local_secret_change_me'),
   GITHUB_APP_ID: optional, GITHUB_APP_PRIVATE_KEY_PATH: optional, GITHUB_APP_PRIVATE_KEY: optional, GITHUB_INSTALLATION_ID: optional,
+  GITHUB_CLIENT_ID: optional, GITHUB_CLIENT_SECRET: optional,
   GITHUB_ALLOWED_OWNER: optional,
   NETLIFY_TOKEN: optional, NETLIFY_SITE_ID: optional,
   SOLANA_RELEASES_ENABLED: z.enum(['true','false']).default('false'),
@@ -70,6 +71,7 @@ export function config(env: NodeJS.ProcessEnv = process.env): Config {
   if((c.EXECUTION_URL&&!c.EXECUTION_TOKEN)||(!c.EXECUTION_URL&&c.EXECUTION_TOKEN))throw new Error('EXECUTION_URL and EXECUTION_TOKEN must be configured together');
   if(c.EXECUTION_TOKEN&&c.EXECUTION_TOKEN.length<32)throw new Error('EXECUTION_TOKEN must contain at least 32 characters');
   if(c.HOLDER_DISTRIBUTIONS_ENABLED==='true'&&c.PAYMENT_MODE!=='custodial')throw new Error('Holder distributions currently require custodial payment mode');
+  if(Boolean(c.GITHUB_CLIENT_ID)!==Boolean(c.GITHUB_CLIENT_SECRET))throw new Error('GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be configured together');
   if (c.NODE_ENV === 'production') {
     const invalid=[
       !c.PUBLIC_ORIGIN.startsWith('https:')&&'HTTPS PUBLIC_ORIGIN',
@@ -95,4 +97,6 @@ const custodyKey=(c:Config):keyof Config=>c.CUSTODY_KEYPAIR_SECRET?'CUSTODY_KEYP
 const githubKey=(c:Config):keyof Config=>c.GITHUB_APP_PRIVATE_KEY?'GITHUB_APP_PRIVATE_KEY':'GITHUB_APP_PRIVATE_KEY_PATH';
 export const paymentKeys=(c:Config):(keyof Config)[]=>[...paymentBase,...(c.PAYMENT_MODE==='custodial'?[custodyKey(c)]:['HIVE_PROGRAM_ID' as const,'SIGNER_KEYPAIR_PATH' as const])];
 export const mintKeys=(c:Config):(keyof Config)[]=>[...mintBase,...(c.PAYMENT_MODE==='custodial'?[custodyKey(c)]:['HIVE_PROGRAM_ID' as const])];
-export const deliveryKeys=(c:Config):(keyof Config)[]=>['GITHUB_APP_ID',githubKey(c),'GITHUB_INSTALLATION_ID','GITHUB_ALLOWED_OWNER'];
+export const deliveryKeys=(c:Config):(keyof Config)[]=>c.GITHUB_CLIENT_ID&&c.GITHUB_CLIENT_SECRET
+ ? ['GITHUB_APP_ID',githubKey(c),'GITHUB_CLIENT_ID','GITHUB_CLIENT_SECRET']
+ : ['GITHUB_APP_ID',githubKey(c),'GITHUB_INSTALLATION_ID','GITHUB_ALLOWED_OWNER'];

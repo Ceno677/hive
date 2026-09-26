@@ -7,7 +7,7 @@ import {createAssociatedTokenAccountIdempotentInstruction,createBurnCheckedInstr
 import {digest} from '../packages/shared/domain.js';
 import {Keypair,Transaction,SystemProgram} from '@solana/web3.js';
 import {sameMessage} from '../packages/payments/requests.js';
-import {config,mintKeys,paymentKeys} from '../packages/shared/config.js';
+import {config,deliveryKeys,mintKeys,paymentKeys} from '../packages/shared/config.js';
 const wallet=Keypair.generate(),to=Keypair.generate().publicKey;
 function unsigned(lamports:number){return new Transaction({feePayer:wallet.publicKey,recentBlockhash:Keypair.generate().publicKey.toBase58()}).add(SystemProgram.transfer({fromPubkey:wallet.publicKey,toPubkey:to,lamports}));}
 it('accepts the exact prepared message after wallet signing',()=>{
@@ -33,6 +33,10 @@ it('uses the low-cost custodial integration without requiring a custom program',
  expect(createChain(c)).toBeInstanceOf(CustodialSolanaChain);
  expect(mintKeys(c)).toContain('CUSTODY_KEYPAIR_PATH');expect(mintKeys(c)).not.toContain('HIVE_PROGRAM_ID');
  expect(paymentKeys(c)).toContain('CUSTODY_KEYPAIR_PATH');expect(paymentKeys(c)).not.toContain('SIGNER_KEYPAIR_PATH');
+});
+it('supports customer GitHub installations without a single allowed owner',()=>{
+ const c=config({NODE_ENV:'test',GITHUB_CLIENT_ID:'Iv1.test',GITHUB_CLIENT_SECRET:'secret'});
+ expect(deliveryKeys(c)).toContain('GITHUB_CLIENT_ID');expect(deliveryKeys(c)).not.toContain('GITHUB_INSTALLATION_ID');
 });
 it('encodes official SPL idempotent ATA, transfer-checked and burn-checked instructions',()=>{
  const payer=wallet.publicKey,mint=Keypair.generate().publicKey,recipient=Keypair.generate().publicKey;

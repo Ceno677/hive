@@ -12,6 +12,7 @@ export const requestSchemas:Record<string,z.ZodTypeAny>={
  '/api/requests/:id/submit':z.object({transaction}).strict(),
  '/api/workflows/:id/prepare-expired-refund':z.object({}).strict(),
  '/api/workflows/:id/submit-expired-refund':z.object({transaction}).strict(),
+ '/api/github/connect':z.object({}).strict(),
  '/api/worker/claim':z.object({kind:z.enum(['BUILD','VERIFY'])}).strict(),
  '/api/worker/attempts/:id/renew':z.object({generation:z.number().int()}).strict(),
  '/api/worker/attempts/:id/submit':z.object({generation:z.number().int(),bundle:bundleSchema}).strict(),

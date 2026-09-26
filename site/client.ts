@@ -23,7 +23,7 @@ async function api(path:string,body?:unknown){
  const r=await fetch('/api'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:{'content-type':'application/json',...(csrf?{'x-csrf-token':csrf}:{})},body:body===undefined?undefined:JSON.stringify(body)});
  const d=await r.json().catch(()=>({}));
  if(!r.ok){
-  const messages:Record<string,string>={sign_in_required:'Connect your wallet to continue.',session_expired:'Please reconnect your wallet.',integration_not_configured:'The network is not open for transactions yet.',execution_not_configured:'The build service is not available yet.',independent_capacity_unavailable:'The hive is waiting for available build and review agents. Try again shortly.',seat_unavailable:'That seat has already been minted.',seat_reserved:'Someone is currently minting that seat. Choose another.',quote_not_payable:'This quote expired. Request a new quote.',payment_not_finalized:'Your transaction is still confirming.',refund_not_available:'The escrow refund is not available yet.',csrf_required:'Please reconnect your wallet.',transaction_mismatch:'The transaction changed. Request a new quote.',human_verification_required:'Complete the anti-bot check to request a quote.',human_verification_failed:'The anti-bot check expired. Please try again.',human_verification_unavailable:'The anti-bot service is temporarily unavailable.'};
+  const messages:Record<string,string>={sign_in_required:'Connect your wallet to continue.',session_expired:'Please reconnect your wallet.',integration_not_configured:'The network is not open for transactions yet.',execution_not_configured:'The build service is not available yet.',independent_capacity_unavailable:'The hive is waiting for available build and review agents. Try again shortly.',seat_unavailable:'That seat has already been minted.',seat_reserved:'Someone is currently minting that seat. Choose another.',quote_not_payable:'This quote expired. Request a new quote.',payment_not_finalized:'Your transaction is still confirming.',refund_not_available:'The escrow refund is not available yet.',csrf_required:'Please reconnect your wallet.',transaction_mismatch:'The transaction changed. Request a new quote.',human_verification_required:'Complete the anti-bot check to request a quote.',human_verification_failed:'The anti-bot check expired. Please try again.',human_verification_unavailable:'The anti-bot service is temporarily unavailable.',repository_not_connected:'Connect this GitHub repository before delivery.',github_authorization_failed:'GitHub authorization failed. Please reconnect GitHub.'};
   throw Error(messages[d.error]??d.message??'The network could not complete this request.');
  }
  return d;
@@ -151,7 +151,15 @@ async function viewFlow(id:string){
   };
   if(caps.delivery.site&&flow.stage!=='DEPLOYMENT')action('PUBLISH WEBSITE ↗',()=>reviewDelivery('STATIC_SITE',caps.delivery.site),true);
    if(caps.delivery.programConfigured&&flow.stage==='DEPLOYMENT')action('REVIEW PROGRAM DEPLOYMENT ↗',async()=>{const result=await api('/workflows/'+id+'/result');if(!result.deploymentTarget)throw Error('The deployment target is unavailable.');await reviewDelivery('SOLANA_PROGRAM',result.deploymentTarget);},true);
-  if(caps.delivery.githubOwner&&flow.stage==='DELIVERY'){
+  if(caps.delivery.githubConnect&&flow.stage==='DELIVERY'){
+   const repositories=await api('/github/repositories');
+   if(!repositories.length)action('CONNECT GITHUB ↗',async()=>{const connection=await api('/github/connect',{});location.assign(connection.url);},true);
+   else{
+    const label=element('label','CONNECTED GITHUB REPOSITORY'),repo=element('select') as HTMLSelectElement;repo.setAttribute('aria-label','Connected GitHub repository');
+    for(const item of repositories){const option=element('option',item.fullName) as HTMLOptionElement;option.value=item.fullName;repo.append(option);}
+    label.append(repo);content.append(label);action('DELIVER TO GITHUB ↗',()=>reviewDelivery('GITHUB',repo.value),true);
+   }
+  }else if(caps.delivery.githubOwner&&flow.stage==='DELIVERY'){
    const label=element('label','CONNECTED GITHUB REPOSITORY / '+caps.delivery.githubOwner+'/name'),repo=element('input');repo.type='text';repo.placeholder=caps.delivery.githubOwner+'/repository';repo.setAttribute('aria-label','Connected GitHub repository');label.append(repo);content.append(label);
    action('DELIVER TO GITHUB ↗',()=>reviewDelivery('GITHUB',repo.value.trim()),true);
   }

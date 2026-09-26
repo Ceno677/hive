@@ -57,11 +57,18 @@ if(c.ARTIFACT_STORAGE==='s3')await check('private artifact bucket',async()=>{
  try{await client.send(new HeadBucketCommand({Bucket:c.S3_BUCKET}));}finally{client.destroy();}
 });
 
-if(c.GITHUB_APP_ID&&c.GITHUB_INSTALLATION_ID&&(c.GITHUB_APP_PRIVATE_KEY_PATH||c.GITHUB_APP_PRIVATE_KEY)&&c.GITHUB_ALLOWED_OWNER)await check('GitHub App installation and allowed owner',async()=>{
- const auth=createAppAuth({appId:c.GITHUB_APP_ID!,installationId:Number(c.GITHUB_INSTALLATION_ID),privateKey:await loadTextSecret(c.GITHUB_APP_PRIVATE_KEY_PATH,c.GITHUB_APP_PRIVATE_KEY)});
- const token=await auth({type:'installation'}),response=await fetch('https://api.github.com/installation/repositories?per_page=100',{headers:{authorization:'Bearer '+token.token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'}});
- if(!response.ok)throw Error('GitHub returned HTTP '+response.status);
- const body=await response.json() as any;if(!body.repositories?.some((repo:any)=>repo.owner?.login?.toLowerCase()===c.GITHUB_ALLOWED_OWNER!.toLowerCase()))throw Error('installation has no repository under '+c.GITHUB_ALLOWED_OWNER);
+if(c.GITHUB_APP_ID&&(c.GITHUB_APP_PRIVATE_KEY_PATH||c.GITHUB_APP_PRIVATE_KEY))await check('GitHub App credentials and delivery mode',async()=>{
+ const privateKey=await loadTextSecret(c.GITHUB_APP_PRIVATE_KEY_PATH,c.GITHUB_APP_PRIVATE_KEY);
+ if(c.GITHUB_CLIENT_ID&&c.GITHUB_CLIENT_SECRET){
+  const auth=createAppAuth({appId:c.GITHUB_APP_ID!,privateKey}),token=await auth({type:'app'});
+  const response=await fetch('https://api.github.com/app',{headers:{authorization:'Bearer '+token.token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'}});
+  if(!response.ok)throw Error('GitHub App returned HTTP '+response.status);
+ }else{
+  const auth=createAppAuth({appId:c.GITHUB_APP_ID!,installationId:Number(c.GITHUB_INSTALLATION_ID),privateKey});
+  const token=await auth({type:'installation'}),response=await fetch('https://api.github.com/installation/repositories?per_page=100',{headers:{authorization:'Bearer '+token.token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'}});
+  if(!response.ok)throw Error('GitHub returned HTTP '+response.status);
+  const body=await response.json() as any;if(!body.repositories?.some((repo:any)=>repo.owner?.login?.toLowerCase()===c.GITHUB_ALLOWED_OWNER!.toLowerCase()))throw Error('installation has no repository under '+c.GITHUB_ALLOWED_OWNER);
+ }
 });
 
 if(c.NETLIFY_TOKEN&&c.NETLIFY_SITE_ID)await check('Netlify site access',async()=>{

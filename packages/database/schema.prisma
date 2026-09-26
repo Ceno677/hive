@@ -11,6 +11,29 @@ model Wallet {
   sessions Session[]
   workflows Workflow[]
   workers Worker[]
+  githubStates GitHubConnectState[]
+  githubRepositories GitHubRepository[]
+}
+model GitHubConnectState {
+  stateHash String @id
+  wallet String
+  owner Wallet @relation(fields: [wallet], references: [address])
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([expiresAt])
+}
+model GitHubRepository {
+  id String @id @default(uuid())
+  wallet String
+  owner Wallet @relation(fields: [wallet], references: [address])
+  installationId String
+  account String
+  fullName String
+  private Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([wallet, fullName])
+  @@index([wallet, account])
 }
 model AuthChallenge {
   id String @id @default(uuid())

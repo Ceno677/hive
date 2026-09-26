@@ -19,6 +19,7 @@ This repository now contains a backend implementation and web integration. It is
 - Primary/backup Solana RPC failover, production dependency/config probes, Turnstile-protected model-backed quotes, worker reputation gates, anti-repeat reviewer pairing and deadline warnings.
 - Periodic holder-revenue epochs with DAS collection snapshots, immutable snapshot hashes, two-seat eligibility caps, exact integer allocation, durable payout retries and public distribution proof routes.
 - Authenticated remote Docker execution for Railway-hosted schedulers plus a Caddy/Compose runner package for trusted checks and project-operated agents.
+- Wallet-linked GitHub App authorization, writable-repository discovery and delivery constrained to each customer's verified installation; user access tokens are not retained.
 
 ## Verified here
 
@@ -43,7 +44,7 @@ This repository now contains a backend implementation and web integration. It is
 - No SBF artifact was built using installed Anchor/Solana tooling in this environment.
 - GitHub, Netlify, S3 and actual Solana deployment adapters need credentialed smoke tests.
 - The holder snapshot and distribution ledger are implemented but no real HMD payout has run; keep HOLDER_DISTRIBUTIONS_ENABLED=false until a small live payout is inspected.
-- The configured GitHub installation publishes a deterministic branch to an existing allowed-owner repository. Arbitrary user GitHub OAuth connections and automatic new-repository transfer are not implemented.
+- GitHub delivery publishes a deterministic branch to an existing repository in the wallet-linked installation. Automatic creation or transfer of a brand-new repository is not implemented.
 - Solana build-image/offline-dependency preparation is operator setup; the base container is not a complete arbitrary-program toolchain.
 
 ## Deliberately unavailable / further work

@@ -9,10 +9,11 @@ import {z,ZodError} from 'zod';
 import {PublicKey} from '@solana/web3.js';
 import {Redis} from 'ioredis';
 import type {PrismaClient} from '@prisma/client';
+import {serial} from '../../packages/database/client.js';
 import {Auth} from '../../packages/auth/service.js';
 import {Engine} from '../../packages/orchestrator/engine.js';
 import {Payments} from '../../packages/payments/requests.js';
-import {Fault,digest,hash,bundleSchema,planSchema,keySchema,skills} from '../../packages/shared/domain.js';
+import {Fault,digest,hash,secret,bundleSchema,planSchema,keySchema,skills} from '../../packages/shared/domain.js';
 import {type Config,missing,missingModels,paymentKeys,mintKeys,deliveryKeys} from '../../packages/shared/config.js';
 import {plan,type Model} from '../../packages/ai/provider.js';
 import type {Chain} from '../../packages/solana/chain.js';
@@ -22,6 +23,7 @@ import {deliveryRoutes} from './delivery.js';
 import {observe} from './observability.js';
 import {requestSchemas} from '../../packages/shared/http-schemas.js';
 import {deploymentAddress} from '../../packages/delivery/solana-deploy.js';
+import {exchangeGitHubConnection} from '../../packages/delivery/github.js';
 const uuid=z.string().uuid(),idOf=(r:FastifyRequest)=>uuid.parse((r.params as any).id);
 export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:ArtifactStore;model:Model;serveStatic?:boolean;logger?:boolean}){
  const {db,c,chain,store,model}=opts,auth=new Auth(db,c),engine=new Engine(db,chain,store,c),payments=new Payments(db,chain,engine,c);
@@ -90,7 +92,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   mint:{enabled:!missing(c,mintRequired).length,missing:missing(c,mintRequired)},
   jobs:{enabled:!jobMissing.length&&c.EXECUTION_ENABLED==='true',missing:jobMissing,execution:c.EXECUTION_ENABLED==='true'},
   skills:Object.keys(skills).filter(s=>s!=='rust'||!!c.RUST_SANDBOX_IMAGE),tokenMint:c.HMD_MINT??null,quality:{reviewQuorum:c.REVIEW_QUORUM,repairPasses:c.AGENT_REPAIR_PASSES},
-  delivery:{site:c.NETLIFY_SITE_ID??null,githubOwner:c.GITHUB_ALLOWED_OWNER??null,programConfigured:c.SOLANA_RELEASES_ENABLED==='true'&&Boolean(c.DEPLOY_PROGRAM_SEED&&c.SOLANA_BUILD_IMAGE)},
+  delivery:{site:c.NETLIFY_SITE_ID??null,githubOwner:c.GITHUB_ALLOWED_OWNER??null,githubConnect:Boolean(c.GITHUB_CLIENT_ID&&c.GITHUB_CLIENT_SECRET),programConfigured:c.SOLANA_RELEASES_ENABLED==='true'&&Boolean(c.DEPLOY_PROGRAM_SEED&&c.SOLANA_BUILD_IMAGE)},
   holderDistributions:{enabled:c.HOLDER_DISTRIBUTIONS_ENABLED==='true',intervalHours:c.HOLDER_DISTRIBUTION_INTERVAL_HOURS},
   security:{turnstileSiteKey:c.TURNSTILE_SITE_KEY??null}
  }));
@@ -194,6 +196,32 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   };
   const timer=setInterval(tick,2000);reply.raw.on('close',()=>{closed=true;clearInterval(timer);});await tick();
  });
+ app.post('/api/github/connect',{config:{rateLimit:{max:5,timeWindow:'1 minute'}}},async r=>{
+  const owner=await wallet(r);
+  if(!c.GITHUB_CLIENT_ID||!c.GITHUB_CLIENT_SECRET)throw new Fault(503,'github_oauth_not_configured');
+  const state=secret();
+  await db.$transaction([
+   db.gitHubConnectState.deleteMany({where:{expiresAt:{lte:new Date()}}}),
+   db.gitHubConnectState.create({data:{stateHash:digest(state),wallet:owner,expiresAt:new Date(Date.now()+600000)}})
+  ]);
+  const url=new URL('https://github.com/login/oauth/authorize');
+  url.searchParams.set('client_id',c.GITHUB_CLIENT_ID);url.searchParams.set('redirect_uri',new URL('/api/github/callback',c.PUBLIC_ORIGIN).toString());url.searchParams.set('state',state);
+  return{url:url.toString()};
+ });
+ app.get('/api/github/callback',async(r,reply)=>{
+  const query=z.object({code:z.string().min(8).max(500),state:z.string().min(32).max(100)}).parse(r.query);
+  const pending=await db.gitHubConnectState.findUnique({where:{stateHash:digest(query.state)}});
+  if(!pending||pending.expiresAt<=new Date())throw new Fault(401,'github_state_invalid');
+  const repositories=await exchangeGitHubConnection(c,query.code);
+  await serial(async tx=>{
+   const consumed=await tx.gitHubConnectState.deleteMany({where:{stateHash:pending.stateHash,wallet:pending.wallet,expiresAt:{gt:new Date()}}});
+   if(!consumed.count)throw new Fault(409,'github_state_used');
+   await tx.gitHubRepository.deleteMany({where:{wallet:pending.wallet}});
+   if(repositories.length)await tx.gitHubRepository.createMany({data:repositories.map(repo=>({wallet:pending.wallet,...repo}))});
+  },db);
+  return reply.redirect(new URL('/?github=connected',c.PUBLIC_ORIGIN).toString(),303);
+ });
+ app.get('/api/github/repositories',async r=>db.gitHubRepository.findMany({where:{wallet:await wallet(r)},orderBy:{fullName:'asc'},select:{fullName:true,account:true,private:true,updatedAt:true}}));
  app.post('/api/workers/register',async r=>{
   const b=z.object({seatId:z.number().int().min(1).max(888),deviceKey:keySchema,name:z.string().min(1).max(80),capabilities:z.array(z.enum(['typescript','html','rust'])).min(1).max(3),maxConcurrent:z.number().int().min(1).max(4).default(1),public:z.boolean().default(false)}).strict().parse(r.body);
   return engine.enroll(await wallet(r),b);

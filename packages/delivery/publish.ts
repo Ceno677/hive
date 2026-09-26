@@ -1,22 +1,20 @@
-import {createAppAuth} from '@octokit/auth-app';
 import type {Config} from '../shared/config.js';
 import {Fault,digest,type Bundle} from '../shared/domain.js';
-import {loadTextSecret} from '../shared/secrets.js';
+import {githubInstallationToken} from './github.js';
 export class Publisher{
  constructor(private c:Config){}
- async github(bundle:Bundle,target:string,releaseId:string){
-  if(!this.c.GITHUB_APP_ID||(!this.c.GITHUB_APP_PRIVATE_KEY_PATH&&!this.c.GITHUB_APP_PRIVATE_KEY)||!this.c.GITHUB_INSTALLATION_ID)throw new Fault(503,'github_not_configured');
+ async github(bundle:Bundle,target:string,releaseId:string,installationId:string,connected=false){
+  if(!this.c.GITHUB_APP_ID||(!this.c.GITHUB_APP_PRIVATE_KEY_PATH&&!this.c.GITHUB_APP_PRIVATE_KEY))throw new Fault(503,'github_not_configured');
   const allowed=this.c.GITHUB_ALLOWED_OWNER;
-  if(!allowed||!new RegExp('^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$').test(target)||target.split('/')[0]!==allowed)throw new Fault(403,'repository_not_allowed');
-  const auth=createAppAuth({appId:this.c.GITHUB_APP_ID,privateKey:await loadTextSecret(this.c.GITHUB_APP_PRIVATE_KEY_PATH,this.c.GITHUB_APP_PRIVATE_KEY),installationId:Number(this.c.GITHUB_INSTALLATION_ID)});
-  const token=await auth({type:'installation'});
+  if(!new RegExp('^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+$').test(target)||(!connected&&(!allowed||target.split('/')[0]!==allowed)))throw new Fault(403,'repository_not_allowed');
+  const token=await githubInstallationToken(this.c,installationId);
   const call=async(path:string,body?:unknown)=>{
-   const r=await fetch('https://api.github.com'+path,{method:body?'POST':'GET',headers:{authorization:'Bearer '+token.token,accept:'application/vnd.github+json','content-type':'application/json','x-github-api-version':'2022-11-28'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});
+   const r=await fetch('https://api.github.com'+path,{method:body?'POST':'GET',headers:{authorization:'Bearer '+token,accept:'application/vnd.github+json','content-type':'application/json','x-github-api-version':'2022-11-28'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(30000)});
    if(!r.ok)throw new Fault(502,'github_request_failed');return r.json() as Promise<any>;
   };
   const base='/repos/'+target,repo=await call(base),branch='hive/release-'+releaseId;
   // Existing published branch makes retry safe after a process crash.
-  const lookup=await fetch('https://api.github.com'+base+'/git/ref/heads/'+branch,{headers:{authorization:'Bearer '+token.token},signal:AbortSignal.timeout(30000)});
+  const lookup=await fetch('https://api.github.com'+base+'/git/ref/heads/'+branch,{headers:{authorization:'Bearer '+token},signal:AbortSignal.timeout(30000)});
   if(lookup.ok){const existing=await lookup.json() as any;return{url:'https://github.com/'+target+'/tree/'+branch,manifest:{repository:target,branch,commit:existing.object.sha}};}
   if(lookup.status!==404)throw new Fault(502,'github_lookup_failed');
   const head=await call(base+'/git/ref/heads/'+repo.default_branch),commit=await call(base+'/git/commits/'+head.object.sha);

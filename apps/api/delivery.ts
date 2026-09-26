@@ -12,6 +12,12 @@ import type {Engine} from '../../packages/orchestrator/engine.js';
 import {zipSync,strToU8} from 'fflate';
 export function deliveryRoutes(app:FastifyInstance,db:PrismaClient,c:Config,store:ArtifactStore,wallet:(r:FastifyRequest)=>Promise<string>,resolveBundle:(taskId:string)=>ReturnType<Scheduler['artifactTree']>,engine:Engine){
  const publisher=new Publisher(c);
+ const githubTarget=async(ownerWallet:string,target:string)=>{
+  const connected=await db.gitHubRepository.findUnique({where:{wallet_fullName:{wallet:ownerWallet,fullName:target}}});
+  if(connected)return{installationId:connected.installationId,connected:true};
+  if(c.GITHUB_INSTALLATION_ID&&c.GITHUB_ALLOWED_OWNER&&target.split('/')[0]===c.GITHUB_ALLOWED_OWNER)return{installationId:c.GITHUB_INSTALLATION_ID,connected:false};
+  throw new Fault(403,'repository_not_connected');
+ };
  app.get('/api/workflows/:id/download',async(r,reply)=>{
   const owner=await wallet(r),id=z.string().uuid().parse((r.params as any).id);
   const f=await db.workflow.findUnique({where:{id},include:{tasks:{include:{dependents:true}}}});
@@ -28,6 +34,7 @@ export function deliveryRoutes(app:FastifyInstance,db:PrismaClient,c:Config,stor
   if(!f||f.wallet!==owner)throw new Fault(404,'not_found');
   if(f.status!=='COMPLETED'&&!(f.status==='AWAITING_APPROVAL'&&((f.stage==='DELIVERY'&&input.action==='GITHUB')||(f.stage==='DEPLOYMENT'&&input.action==='SOLANA_PROGRAM')||(f.stage==='HOSTING'&&input.action==='STATIC_SITE'))))throw new Fault(409,'work_not_verified');
   if(input.action==='SOLANA_PROGRAM'&&input.target!==f.deploymentTarget)throw new Fault(403,'deployment_target_not_allowed');
+  if(input.action==='GITHUB')await githubTarget(owner,input.target);
   const sink=f.tasks.find(t=>t.dependents.length===0)!;
   const bundle=await resolveBundle(sink.id);
   if(hash(bundle)!==input.artifactHash)throw new Fault(409,'artifact_changed');
@@ -61,7 +68,8 @@ export function deliveryRoutes(app:FastifyInstance,db:PrismaClient,c:Config,stor
   const won=await db.release.updateMany({where:{id:release.id,state:{in:['PENDING','FAILED']}},data:{state:'PUBLISHING'}});
   if(!won.count)throw new Fault(409,'publication_in_progress');
   try{
-   const result=approved.action==='GITHUB'?await publisher.github(bundle,approved.target,release.id):approved.action==='SOLANA_PROGRAM'?await deployProgram(c,bundle,approved.target,approved.workflow.wallet+':'+approved.workflow.requestKey):await publisher.staticSite(bundle,approved.target,release.id);
+   const github=approved.action==='GITHUB'?await githubTarget(owner,approved.target):null;
+   const result=approved.action==='GITHUB'?await publisher.github(bundle,approved.target,release.id,github!.installationId,github!.connected):approved.action==='SOLANA_PROGRAM'?await deployProgram(c,bundle,approved.target,approved.workflow.wallet+':'+approved.workflow.requestKey):await publisher.staticSite(bundle,approved.target,release.id);
    const row=await serial(async tx=>{
     const row=await tx.release.update({where:{id:release.id},data:{state:approved.action==='STATIC_SITE'?'VALIDATING':'COMPLETED',url:result.url,manifest:result.manifest,failure:null}});
     if(approved.workflow.mode==='SOLANA_APP'&&approved.action==='SOLANA_PROGRAM'){

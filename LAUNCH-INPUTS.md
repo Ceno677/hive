@@ -12,7 +12,7 @@ Confirmed: one NFT burns **8,888 HMD**. Users build in the website, without loca
 6. Job price in HMD and final confirmation of the proposed 70% builder / 15% verifier / 15% treasury split. The current custody/treasury public address is configured. The burn-to-mint payment is not operating revenue; AI and hosting need a separate funded budget.
 7. Confirm user-paid SOL fees and final-completion rewards/full refund before vesting, or specify another policy for implementation.
 8. Job deadline in whole hours, from 1 to 168. It is disclosed before payment and starts at finalized funding. Missing it produces a full refund.
-9. GitHub organization/owner used for launch delivery and the GitHub App installation with access to users' connected repositories under that owner. Automatic repo transfer and arbitrary user-owned installations require a separate GitHub connection flow.
+9. GitHub App credentials. Configure the App callback URL as `https://hmd.bot/api/github/callback` and grant repository Contents read/write plus Metadata read. Customers can authorize installations and select only repositories GitHub reports they can push to. A single operator-owned installation is still supported as a fallback.
 10. AI/server budget and provider-project spending limit. Quality-first does not mean unlimited spending. The backend bounds task count, input/output size, repair passes and retries and logs usage, while the provider project limit is the launch-wide dollar circuit breaker.
 11. Distribution confirmation. The implemented launch default is every 72 hours, proportional per NFT, with no more than two eligible seats per wallet. Confirm the minimum raw HMD amount, if any, before enabling it.
 
