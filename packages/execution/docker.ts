@@ -20,7 +20,7 @@ export class DockerExecutor implements Executor {
   return new Promise((resolve,reject)=>{
    const programBuild=command.includes('/runner/build-solana.cjs');
    const image=programBuild?(process.env.SOLANA_BUILD_IMAGE??this.image):command[0]==='cargo'?(process.env.RUST_SANDBOX_IMAGE??this.image):this.image;
-   const args=['run','--rm','-i','--name',name,'--label','hive.sandbox=true','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory',programBuild?'2g':'512m','--memory-swap',programBuild?'2g':'512m','--cpus','1','--user','1000:1000','--tmpfs',programBuild?'/work:rw,nosuid,nodev,size=512m,uid=1000,gid=1000':'/work:rw,nosuid,nodev,size=128m,uid=1000,gid=1000','--tmpfs','/tmp:rw,nosuid,nodev,size=32m,uid=1000,gid=1000',image];
+   const args=['run','--rm','-i','--name',name,'--label','hive.sandbox=true','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory',programBuild?'2g':'512m','--memory-swap',programBuild?'2g':'512m','--cpus','1','--user','1000:1000','--tmpfs',programBuild?'/work:rw,exec,nosuid,nodev,size=512m,uid=1000,gid=1000':'/work:rw,exec,nosuid,nodev,size=128m,uid=1000,gid=1000','--tmpfs','/tmp:rw,nosuid,nodev,size=32m,uid=1000,gid=1000',image];
    const child=spawn('docker',args,{stdio:['pipe','pipe','pipe'],windowsHide:true});
    let output='',errors='',done=false;
    const cleanup=()=>{const p=spawn('docker',['rm','-f',name],{stdio:'ignore',windowsHide:true});p.on('error',()=>{});};
