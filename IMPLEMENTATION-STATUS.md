@@ -17,6 +17,8 @@ This repository now contains a backend implementation and web integration. It is
 - Existing UI controls integrated without replacing the design; original art lock preserved.
 - OpenAI Responses/Chat and Anthropic adapters with role-specific models, reasoning/service-tier controls, input/output bounds, private-response mode, bounded retry/backoff, usage logs and truncation rejection.
 - Primary/backup Solana RPC failover, production dependency/config probes, Turnstile-protected model-backed quotes, worker reputation gates, anti-repeat reviewer pairing and deadline warnings.
+- Periodic holder-revenue epochs with DAS collection snapshots, immutable snapshot hashes, two-seat eligibility caps, exact integer allocation, durable payout retries and public distribution proof routes.
+- Authenticated remote Docker execution for Railway-hosted schedulers plus a Caddy/Compose runner package for trusted checks and project-operated agents.
 
 ## Verified here
 
@@ -40,6 +42,7 @@ This repository now contains a backend implementation and web integration. It is
 - No mint/burn/escrow transaction, metadata CPI or payout has run against a validator/devnet in this session. Native Rust tests are not validator integration tests.
 - No SBF artifact was built using installed Anchor/Solana tooling in this environment.
 - GitHub, Netlify, S3 and actual Solana deployment adapters need credentialed smoke tests.
+- The holder snapshot and distribution ledger are implemented but no real HMD payout has run; keep HOLDER_DISTRIBUTIONS_ENABLED=false until a small live payout is inspected.
 - The configured GitHub installation publishes a deterministic branch to an existing allowed-owner repository. Arbitrary user GitHub OAuth connections and automatic new-repository transfer are not implemented.
 - Solana build-image/offline-dependency preparation is operator setup; the base container is not a complete arbitrary-program toolchain.
 

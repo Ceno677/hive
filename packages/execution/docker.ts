@@ -4,14 +4,22 @@ import type {Bundle} from '../shared/domain.js';
 import {Fault,hash} from '../shared/domain.js';
 export type Evidence={exitCode:number;stdout:string;stderr:string;durationMs:number;command:string[];artifactHash:string;image:string};
 export interface Executor {run(bundle:Bundle,command:string[]):Promise<Evidence>}
+const allowedCommands=new Set([
+ JSON.stringify(['node','--test']),
+ JSON.stringify(['node','/runner/check-static.cjs']),
+ JSON.stringify(['cargo','test','--offline']),
+ JSON.stringify(['node','/runner/build-solana.cjs'])
+]);
+export const allowedExecutionCommand=(command:string[])=>allowedCommands.has(JSON.stringify(command));
 export class DockerExecutor implements Executor {
  constructor(private image:string,private enabled:boolean){}
  async run(bundle:Bundle,command:string[]):Promise<Evidence>{
   if(!this.enabled)throw new Fault(503,'execution_not_configured');
+  if(!allowedExecutionCommand(command))throw new Fault(422,'execution_command_not_allowed');
   const name='hive-'+randomUUID();
   return new Promise((resolve,reject)=>{
    const programBuild=command.includes('/runner/build-solana.cjs');
-   const image=command[0]==='cargo'?(process.env.RUST_SANDBOX_IMAGE??this.image):this.image;
+   const image=programBuild?(process.env.SOLANA_BUILD_IMAGE??this.image):command[0]==='cargo'?(process.env.RUST_SANDBOX_IMAGE??this.image):this.image;
    const args=['run','--rm','-i','--name',name,'--label','hive.sandbox=true','--network','none','--read-only','--cap-drop','ALL','--security-opt','no-new-privileges','--pids-limit','64','--memory',programBuild?'2g':'512m','--memory-swap',programBuild?'2g':'512m','--cpus','1','--user','1000:1000','--tmpfs',programBuild?'/work:rw,nosuid,nodev,size=512m,uid=1000,gid=1000':'/work:rw,nosuid,nodev,size=128m,uid=1000,gid=1000','--tmpfs','/tmp:rw,nosuid,nodev,size=32m,uid=1000,gid=1000',image];
    const child=spawn('docker',args,{stdio:['pipe','pipe','pipe'],windowsHide:true});
    let output='',errors='',done=false;

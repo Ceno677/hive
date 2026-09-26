@@ -1,4 +1,3 @@
-import {readFile} from 'node:fs/promises';
 import {Connection,Keypair,PublicKey,Transaction,TransactionInstruction} from '@solana/web3.js';
 import {createUmi} from '@metaplex-foundation/umi-bundle-defaults';
 import {createNoopSigner,createSignerFromKeypair,keypairIdentity,percentAmount,publicKey} from '@metaplex-foundation/umi';
@@ -7,6 +6,7 @@ import {createNft,fetchDigitalAsset,findMetadataPda,mplTokenMetadata,verifyColle
 import type {Config} from '../shared/config.js';
 import {Fault} from '../shared/domain.js';
 import {mintPriceBaseUnits} from '../shared/mint-price.js';
+import {loadSolanaKeypair} from '../shared/secrets.js';
 import type {Chain,Ownership} from './chain.js';
 import {resilientConnection} from './chain.js';
 import {createAssociatedTokenAccountIdempotentInstruction,createBurnCheckedInstruction,createTransferCheckedInstruction,getAssociatedTokenAddressSync,getMint,TOKEN_PROGRAM_ID} from './tokens.js';
@@ -21,8 +21,8 @@ export class CustodialSolanaChain implements Chain {
   this.connection=resilientConnection(new Connection(c.SOLANA_RPC_URL,'finalized'),c.SOLANA_BACKUP_RPC_URL?new Connection(c.SOLANA_BACKUP_RPC_URL,'finalized'):undefined);
  }
  private async signer(){
-  if(!this.c.CUSTODY_KEYPAIR_PATH)throw new Fault(503,'custody_signer_not_configured');
-  const signer=Keypair.fromSecretKey(Uint8Array.from(JSON.parse(await readFile(this.c.CUSTODY_KEYPAIR_PATH,'utf8'))));
+  if(!this.c.CUSTODY_KEYPAIR_PATH&&!this.c.CUSTODY_KEYPAIR_SECRET)throw new Fault(503,'custody_signer_not_configured');
+  const signer=await loadSolanaKeypair(this.c.CUSTODY_KEYPAIR_PATH,this.c.CUSTODY_KEYPAIR_SECRET);
   if(this.c.TREASURY_WALLET&&signer.publicKey.toBase58()!==this.c.TREASURY_WALLET)throw new Fault(503,'custody_treasury_mismatch');
   return signer;
  }
@@ -139,7 +139,7 @@ export class CustodialSolanaChain implements Chain {
   return this.connection.sendRawTransaction(tx.serialize(),{skipPreflight:false,maxRetries:3});
  }
  private async priorSettlement(source:PublicKey,memo:string,destination:PublicKey,mint:PublicKey,amount:string,authority:PublicKey){
-  for(const row of await this.connection.getSignaturesForAddress(source,{limit:30},'finalized')){
+  for(const row of await this.connection.getSignaturesForAddress(source,{limit:1000},'finalized')){
    if(row.err)continue;
    const tx=await this.connection.getParsedTransaction(row.signature,{commitment:'finalized',maxSupportedTransactionVersion:0});
    if(tx&&!tx.meta?.err&&this.parsedMemo(tx,memo)&&this.parsedTransfer(tx,source,destination,authority,mint,amount))return row.signature;

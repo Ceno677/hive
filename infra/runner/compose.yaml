@@ -1,0 +1,62 @@
+name: hive-runner
+services:
+  executor:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.executor
+    restart: unless-stopped
+    env_file: [executor.env]
+    environment:
+      PORT: 8090
+    expose: ["8090"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp, /app/.npm]
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on: [executor]
+    env_file: [executor.env]
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+  worker-builder:
+    profiles: [agents]
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    restart: unless-stopped
+    env_file: [worker-builder.env]
+    volumes: [/var/run/docker.sock:/var/run/docker.sock]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp, /app/.npm]
+  worker-reviewer-a:
+    profiles: [agents]
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    restart: unless-stopped
+    env_file: [worker-reviewer-a.env]
+    volumes: [/var/run/docker.sock:/var/run/docker.sock]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp, /app/.npm]
+  worker-reviewer-b:
+    profiles: [agents]
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.worker
+    restart: unless-stopped
+    env_file: [worker-reviewer-b.env]
+    volumes: [/var/run/docker.sock:/var/run/docker.sock]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp, /app/.npm]
+volumes:
+  caddy_data:
+  caddy_config:

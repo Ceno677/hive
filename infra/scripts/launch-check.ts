@@ -8,10 +8,12 @@ import {PrismaClient} from '@prisma/client';
 import {config,deliveryKeys,missing,missingModels,mintKeys,paymentKeys} from '../../packages/shared/config.js';
 import {createChain} from '../../packages/solana/factory.js';
 import {mintPriceBaseUnits} from '../../packages/shared/mint-price.js';
+import {loadSolanaKeypair,loadTextSecret} from '../../packages/shared/secrets.js';
+import {DasHolderSnapshot} from '../../packages/payments/holders.js';
 
 const c=config({...process.env,NODE_ENV:'test'}),problems:string[]=[];
 const db=new PrismaClient({datasourceUrl:c.DATABASE_URL});
-const required=[...new Set([...mintKeys(c),...paymentKeys(c),...deliveryKeys,'AI_API_KEY','OPERATIONS_TOKEN','TURNSTILE_SITE_KEY','TURNSTILE_SECRET_KEY','NETLIFY_TOKEN','NETLIFY_SITE_ID','DEPLOY_PROGRAM_SEED','SIGNER_KEYPAIR_PATH','SOLANA_BUILD_IMAGE','RUST_SANDBOX_IMAGE'] as const)];
+const required=[...new Set([...mintKeys(c),...paymentKeys(c),...deliveryKeys(c),'AI_API_KEY','OPERATIONS_TOKEN','TURNSTILE_SITE_KEY','TURNSTILE_SECRET_KEY',...(c.SOLANA_RELEASES_ENABLED==='true'?['NETLIFY_TOKEN','NETLIFY_SITE_ID','DEPLOY_PROGRAM_SEED','SIGNER_KEYPAIR_PATH','SOLANA_BUILD_IMAGE'] as const:[])] as const)];
 for(const name of missing(c,required))problems.push('missing '+name);
 for(const name of missingModels(c))problems.push('missing '+name+' (or AI_MODEL fallback)');
 if(process.env.NODE_ENV!=='production')problems.push('NODE_ENV must be production');
@@ -48,14 +50,15 @@ if(c.SOLANA_BACKUP_RPC_URL)await check('backup Solana RPC',async()=>{await new C
 for(const path of [c.CUSTODY_KEYPAIR_PATH,c.SIGNER_KEYPAIR_PATH,c.GITHUB_APP_PRIVATE_KEY_PATH].filter(Boolean) as string[]){
  await check('private key file '+path,async()=>{await access(path);if(path!==c.GITHUB_APP_PRIVATE_KEY_PATH)Keypair.fromSecretKey(Uint8Array.from(JSON.parse(await readFile(path,'utf8'))));});
 }
+if(c.CUSTODY_KEYPAIR_SECRET)await check('custody key secret',async()=>{await loadSolanaKeypair(undefined,c.CUSTODY_KEYPAIR_SECRET);});
 
 if(c.ARTIFACT_STORAGE==='s3')await check('private artifact bucket',async()=>{
  const client=new S3Client({endpoint:c.S3_ENDPOINT,region:c.S3_REGION,forcePathStyle:true,credentials:{accessKeyId:c.S3_ACCESS_KEY,secretAccessKey:c.S3_SECRET_KEY}});
  try{await client.send(new HeadBucketCommand({Bucket:c.S3_BUCKET}));}finally{client.destroy();}
 });
 
-if(c.GITHUB_APP_ID&&c.GITHUB_INSTALLATION_ID&&c.GITHUB_APP_PRIVATE_KEY_PATH&&c.GITHUB_ALLOWED_OWNER)await check('GitHub App installation and allowed owner',async()=>{
- const auth=createAppAuth({appId:c.GITHUB_APP_ID!,installationId:Number(c.GITHUB_INSTALLATION_ID),privateKey:await readFile(c.GITHUB_APP_PRIVATE_KEY_PATH!,'utf8')});
+if(c.GITHUB_APP_ID&&c.GITHUB_INSTALLATION_ID&&(c.GITHUB_APP_PRIVATE_KEY_PATH||c.GITHUB_APP_PRIVATE_KEY)&&c.GITHUB_ALLOWED_OWNER)await check('GitHub App installation and allowed owner',async()=>{
+ const auth=createAppAuth({appId:c.GITHUB_APP_ID!,installationId:Number(c.GITHUB_INSTALLATION_ID),privateKey:await loadTextSecret(c.GITHUB_APP_PRIVATE_KEY_PATH,c.GITHUB_APP_PRIVATE_KEY)});
  const token=await auth({type:'installation'}),response=await fetch('https://api.github.com/installation/repositories?per_page=100',{headers:{authorization:'Bearer '+token.token,accept:'application/vnd.github+json','x-github-api-version':'2022-11-28'}});
  if(!response.ok)throw Error('GitHub returned HTTP '+response.status);
  const body=await response.json() as any;if(!body.repositories?.some((repo:any)=>repo.owner?.login?.toLowerCase()===c.GITHUB_ALLOWED_OWNER!.toLowerCase()))throw Error('installation has no repository under '+c.GITHUB_ALLOWED_OWNER);
@@ -74,7 +77,16 @@ if(c.AI_API_KEY)await check('AI model access',async()=>{
  }
 });
 
-if(c.EXECUTION_ENABLED==='true')for(const image of [...new Set([c.SANDBOX_IMAGE,c.RUST_SANDBOX_IMAGE,c.SOLANA_BUILD_IMAGE].filter(Boolean))] as string[])await check('sandbox image '+image+' is installed',async()=>{await promisify(execFile)('docker',['image','inspect',image],{windowsHide:true});});
+if(c.EXECUTION_ENABLED==='true'&&c.EXECUTION_URL&&c.EXECUTION_TOKEN)await check('remote execution service',async()=>{
+ const response=await fetch(new URL('/ready',c.EXECUTION_URL),{headers:{authorization:'Bearer '+c.EXECUTION_TOKEN},signal:AbortSignal.timeout(15000)});
+ if(!response.ok)throw Error('executor returned HTTP '+response.status);
+});
+else if(c.EXECUTION_ENABLED==='true')for(const image of [...new Set([c.SANDBOX_IMAGE,c.RUST_SANDBOX_IMAGE,c.SOLANA_BUILD_IMAGE].filter(Boolean))] as string[])await check('sandbox image '+image+' is installed',async()=>{await promisify(execFile)('docker',['image','inspect',image],{windowsHide:true});});
+
+if(c.HOLDER_DISTRIBUTIONS_ENABLED==='true'&&c.SEAT_COLLECTION_ADDRESS)await check('NFT holder snapshot provider',async()=>{
+ const snapshot=await new DasHolderSnapshot(c.HOLDER_SNAPSHOT_RPC_URL??c.SOLANA_RPC_URL).snapshot(c.SEAT_COLLECTION_ADDRESS!);
+ if(snapshot.assets.length>888)throw Error('snapshot exceeds collection cap');
+});
 
 await db.$disconnect();
 console.log('Repair passes: '+c.AGENT_REPAIR_PASSES+' | independent review quorum: '+c.REVIEW_QUORUM);

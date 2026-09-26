@@ -25,7 +25,7 @@ import {deploymentAddress} from '../../packages/delivery/solana-deploy.js';
 const uuid=z.string().uuid(),idOf=(r:FastifyRequest)=>uuid.parse((r.params as any).id);
 export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:ArtifactStore;model:Model;serveStatic?:boolean;logger?:boolean}){
  const {db,c,chain,store,model}=opts,auth=new Auth(db,c),engine=new Engine(db,chain,store,c),payments=new Payments(db,chain,engine,c);
- const paymentRequired=paymentKeys(c),mintRequired=mintKeys(c);
+ const paymentRequired=paymentKeys(c),mintRequired=mintKeys(c),deliveryRequired=deliveryKeys(c);
  const app=Fastify({logger:opts.logger===false?false:{redact:['req.headers.authorization','req.headers.cookie','req.body','res.headers.set-cookie']},bodyLimit:2_100_000,trustProxy:c.TRUST_PROXY==='true'});
  app.register(cookie);
  app.register(cors,{origin:c.PUBLIC_ORIGIN,credentials:true});
@@ -68,7 +68,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   const {instructions,policy,...safe}=task;
   return{...safe,attempts:(safe.attempts??[]).map((attempt:any)=>({...attempt,verification:attempt.verification?{...attempt.verification,checks:Array.isArray(attempt.verification.checks)?attempt.verification.checks.map((check:any)=>({name:String(check?.name??'check'),passed:Boolean(check?.passed)})):[]}:null}))};
  };
- const jobMissing=[...missing(c,[...paymentRequired,...deliveryKeys,'AI_API_KEY']),...missingModels(c)];
+ const jobMissing=[...missing(c,[...paymentRequired,...deliveryRequired,'AI_API_KEY']),...missingModels(c)];
  async function verifyHuman(token:string|undefined,ip:string){
   if(!c.TURNSTILE_SECRET_KEY)return;
   if(!token)throw new Fault(400,'human_verification_required');
@@ -90,7 +90,8 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   mint:{enabled:!missing(c,mintRequired).length,missing:missing(c,mintRequired)},
   jobs:{enabled:!jobMissing.length&&c.EXECUTION_ENABLED==='true',missing:jobMissing,execution:c.EXECUTION_ENABLED==='true'},
   skills:Object.keys(skills).filter(s=>s!=='rust'||!!c.RUST_SANDBOX_IMAGE),tokenMint:c.HMD_MINT??null,quality:{reviewQuorum:c.REVIEW_QUORUM,repairPasses:c.AGENT_REPAIR_PASSES},
-  delivery:{site:c.NETLIFY_SITE_ID??null,githubOwner:c.GITHUB_ALLOWED_OWNER??null,programConfigured:Boolean(c.DEPLOY_PROGRAM_SEED&&c.SOLANA_BUILD_IMAGE)},
+  delivery:{site:c.NETLIFY_SITE_ID??null,githubOwner:c.GITHUB_ALLOWED_OWNER??null,programConfigured:c.SOLANA_RELEASES_ENABLED==='true'&&Boolean(c.DEPLOY_PROGRAM_SEED&&c.SOLANA_BUILD_IMAGE)},
+  holderDistributions:{enabled:c.HOLDER_DISTRIBUTIONS_ENABLED==='true',intervalHours:c.HOLDER_DISTRIBUTION_INTERVAL_HOURS},
   security:{turnstileSiteKey:c.TURNSTILE_SITE_KEY??null}
  }));
  app.get('/api/token',async()=>{if(!c.HMD_MINT||!chain.tokenInfo)throw new Fault(503,'integration_not_configured');return chain.tokenInfo();});
@@ -127,14 +128,14 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
  app.post('/api/requests/quote',{config:{rateLimit:{max:3,timeWindow:'1 minute'}}},async r=>{
   const w=await wallet(r);
   payments.require(paymentRequired);
-  const unavailable=[...missing(c,deliveryKeys),...missingModels(c)];
+  const unavailable=[...missing(c,deliveryRequired),...missingModels(c)];
   if(!c.AI_API_KEY||unavailable.length)throw new Fault(503,'integration_not_configured','Required build or delivery settings are missing',{fields:[...(!c.AI_API_KEY?['AI_API_KEY']:[]),...unavailable]});
   if(c.EXECUTION_ENABLED!=='true')throw new Fault(503,'execution_not_configured');
   const b=z.object({requestKey:uuid,prompt:z.string().min(12).max(8000),public:z.boolean().default(false),mode:z.enum(['BUILD','SOLANA_APP']).default('BUILD'),plan:planSchema.optional(),turnstileToken:z.string().min(1).max(2048).optional()}).strict().parse(r.body);
   const old=await db.workflow.findUnique({where:{wallet_requestKey:{wallet:w,requestKey:b.requestKey}}});
   if(old){if(old.prompt!==b.prompt||old.public!==b.public||old.mode!==b.mode)throw new Fault(409,'request_key_conflict');return old;}
   await verifyHuman(b.turnstileToken,r.ip);
-  if(b.mode==='SOLANA_APP'&&(!c.SOLANA_BUILD_IMAGE||!c.DEPLOY_PROGRAM_SEED||!c.NETLIFY_SITE_ID||!c.NETLIFY_TOKEN))throw new Fault(503,'solana_release_not_configured');
+  if(b.mode==='SOLANA_APP'&&(c.SOLANA_RELEASES_ENABLED!=='true'||!c.SOLANA_BUILD_IMAGE||!c.DEPLOY_PROGRAM_SEED||!c.SIGNER_KEYPAIR_PATH||!c.NETLIFY_SITE_ID||!c.NETLIFY_TOKEN))throw new Fault(503,'solana_release_not_configured');
   const deploymentTarget=b.mode==='SOLANA_APP'?deploymentAddress(c,w+':'+b.requestKey):undefined;
   const planned=b.plan??await plan(model,b.prompt,b.mode,deploymentTarget);
   const workers=await db.worker.findMany({where:{status:{in:['ONLINE','BUSY']},heartbeatAt:{gt:new Date(Date.now()-45000)},expiresAt:{gt:new Date()}}});
@@ -260,6 +261,15 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
    activity:events.map(e=>({id:e.seq.toString(),jobId:e.workflowId,time:e.createdAt.toISOString(),type:e.type,message:e.type.replaceAll('.',' ')})),
    artifacts:releases.filter(r=>r.url?.startsWith('https://')).map(r=>({id:r.id,jobId:r.workflowId,kind:r.kind,title:r.kind+' delivery',url:r.url!}))
   };
+ });
+ app.get('/api/holder-distributions',async()=>{
+  const rows=await db.holderDistribution.findMany({orderBy:{createdAt:'desc'},take:100,select:{id:true,status:true,collection:true,snapshotSlot:true,snapshotHash:true,totalAmount:true,eligibleSeats:true,excludedSeats:true,cutoffAt:true,createdAt:true,completedAt:true,_count:{select:{entries:true,rewards:true}}}});
+  return rows.map(row=>({...row,snapshotSlot:row.snapshotSlot.toString()}));
+ });
+ app.get('/api/holder-distributions/:id',async r=>{
+  const row=await db.holderDistribution.findUnique({where:{id:idOf(r)},include:{entries:{orderBy:{wallet:'asc'},select:{wallet:true,assetIds:true,amount:true,state:true,signature:true}},rewards:{select:{workflowId:true,amount:true}}}});
+  if(!row)throw new Fault(404,'not_found');
+  return{...row,snapshotSlot:row.snapshotSlot.toString()};
  });
  app.get('/api/rewards',async r=>db.reward.findMany({where:{beneficiary:await wallet(r)},orderBy:{id:'desc'},take:100}));
  deliveryRoutes(app,db,c,store,wallet,taskId=>assemble(db,store,taskId),engine);

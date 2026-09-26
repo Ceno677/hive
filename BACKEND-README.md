@@ -46,10 +46,14 @@ Use `PAYMENT_MODE=custodial` and supply real launch values in .env:
 - CUSTODY_KEYPAIR_PATH on the trusted service host only. Its public key must equal TREASURY_WALLET and it must remain the collection update authority for launch minting.
 - AI_API_KEY plus either AI_MODEL or every role-specific model, and provider/base URL. OpenAI Responses/Chat and Anthropic adapters are available.
 - EXECUTION_ENABLED=true after building/testing the execution image.
+- If the scheduler is hosted without Docker, set EXECUTION_URL and EXECUTION_TOKEN for the dedicated runner described in RUNNER-DEPLOY.md.
+- Enable periodic holder distributions with HOLDER_DISTRIBUTIONS_ENABLED=true only after the DAS ownership snapshot and real payout smoke tests pass. The default interval is 72 hours.
 - SOLANA_BACKUP_RPC_URL, Turnstile keys, private S3 storage, TRUST_PROXY=true and OPERATIONS_TOKEN are required by production validation.
 - GAS_POLICY=user-pays and SETTLEMENT_POLICY=final-release only if the owner approves those policies.
 
 Prices are positive integer token base units, never decimal floats. Mint decimals come from the actual token mint. Fee shares use basis points; the remainder stays in the configured treasury. Set JOB_DEADLINE_HOURS from 1 to 168; the deadline is shown with the quote and cryptographically bound to the funding memo. Rewards vest only after verified GitHub delivery. The scheduler automatically returns the full custodial balance after an expired job. Alternative partial-work compensation policies need additional implementation, not just different marketing copy.
+
+In custodial mode, each paid protocol reward can be assigned exactly once to a holder distribution. The scheduler takes one DAS collection snapshot after the configured interval, records its hash and finalized reference slot, caps eligibility at two NFTs per wallet, conserves every raw token unit and pays each wallet with a unique retry-safe settlement memo. Distribution history and entries are publicly inspectable through `/api/holder-distributions`.
 
 Only classic SPL Token mints and conventional Metaplex NFTs are supported. Token-2022 extensions, compressed NFTs, gas sponsorship, automatic mainnet program deployment and arbitrary sandbox internet access are intentionally not enabled.
 

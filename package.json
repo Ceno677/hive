@@ -13,6 +13,7 @@
     "dev": "tsx watch apps/api/main.ts",
     "start": "tsx apps/api/main.ts",
     "scheduler": "tsx apps/scheduler/main.ts",
+    "executor": "tsx apps/executor/main.ts",
     "worker": "tsx worker/daemon/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

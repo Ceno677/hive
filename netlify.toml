@@ -6,6 +6,12 @@
   NODE_VERSION = "22"
 
 [[redirects]]
+  from = "/api/*"
+  to = "https://hive-api-production-2cf3.up.railway.app/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/studio"
   to = "/studio/"
   status = 301

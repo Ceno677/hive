@@ -1,6 +1,7 @@
 import {Transaction} from '@solana/web3.js';
 import bs58 from 'bs58';
-import type {PrismaClient} from '@prisma/client';
+import type {PrismaClient,Prisma} from '@prisma/client';
+import {randomUUID} from 'node:crypto';
 import type {Config} from '../shared/config.js';
 import {missing,mintKeys,paymentKeys} from '../shared/config.js';
 import {Fault,hash} from '../shared/domain.js';
@@ -8,6 +9,7 @@ import {serial,event} from '../database/client.js';
 import type {Chain} from '../solana/chain.js';
 import type {Engine} from '../orchestrator/engine.js';
 import {mintPriceBaseUnits} from '../shared/mint-price.js';
+import {allocateHolderRevenue,DasHolderSnapshot,type HolderSnapshotSource} from './holders.js';
 export function sameMessage(prepared:string,signed:string){
  try{
   const a=Transaction.from(Buffer.from(prepared,'base64')),b=Transaction.from(Buffer.from(signed,'base64'));
@@ -16,7 +18,10 @@ export function sameMessage(prepared:string,signed:string){
  }catch{throw new Fault(400,'transaction_mismatch');}
 }
 export class Payments {
- constructor(private db:PrismaClient,private chain:Chain,private engine:Engine,private c:Config){}
+ private holderSource:HolderSnapshotSource;
+ constructor(private db:PrismaClient,private chain:Chain,private engine:Engine,private c:Config,holderSource?:HolderSnapshotSource){
+  this.holderSource=holderSource??new DasHolderSnapshot(c.HOLDER_SNAPSHOT_RPC_URL??c.SOLANA_RPC_URL);
+ }
  require(keys:(keyof Config)[]){const fields=missing(this.c,keys);if(fields.length)throw new Fault(503,'integration_not_configured','Required settings are missing',{fields});}
  async prepare(wallet:string,id:string){
   this.require(paymentKeys(this.c));
@@ -183,5 +188,59 @@ export class Payments {
     },this.db);
    }catch(error){await this.db.workflow.updateMany({where:{id:f.id,status:'REFUND_SENDING'},data:{status:'REFUND_PENDING'}});throw error;}
   }
+ }
+ async prepareHolderDistribution(now=new Date(),force=false){
+  if(this.c.HOLDER_DISTRIBUTIONS_ENABLED!=='true')return null;
+  if(this.c.PAYMENT_MODE!=='custodial'||!this.c.SEAT_COLLECTION_ADDRESS)throw new Fault(503,'holder_distributions_not_configured');
+  const cutoff=new Date(now),eligible=await this.db.reward.findMany({where:{kind:'PROTOCOL',state:'PAID',signature:{startsWith:'retained:'},holderDistributionId:null,createdAt:{lte:cutoff}},orderBy:{createdAt:'asc'}});
+  if(!eligible.length)return null;
+  if(!force&&eligible[0].createdAt.getTime()+this.c.HOLDER_DISTRIBUTION_INTERVAL_HOURS*3600000>now.getTime())return null;
+  const initialTotal=eligible.reduce((sum,row)=>sum+BigInt(row.amount),0n);
+  if(this.c.HOLDER_DISTRIBUTION_MIN_AMOUNT&&initialTotal<BigInt(this.c.HOLDER_DISTRIBUTION_MIN_AMOUNT))return null;
+  const snapshot=await this.holderSource.snapshot(this.c.SEAT_COLLECTION_ADDRESS);
+  if(!snapshot.assets.length)return null;
+  const distributionId=randomUUID(),salt=this.c.SEAT_COLLECTION_ADDRESS+':'+cutoff.toISOString();
+  return serial(async tx=>{
+   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hive-holder-distribution'))`;
+   const rewards=await tx.reward.findMany({where:{kind:'PROTOCOL',state:'PAID',signature:{startsWith:'retained:'},holderDistributionId:null,createdAt:{lte:cutoff}},orderBy:{createdAt:'asc'}});
+   if(!rewards.length)return null;
+   const total=rewards.reduce((sum,row)=>sum+BigInt(row.amount),0n);
+   if(this.c.HOLDER_DISTRIBUTION_MIN_AMOUNT&&total<BigInt(this.c.HOLDER_DISTRIBUTION_MIN_AMOUNT))return null;
+   const allocated=allocateHolderRevenue(total,snapshot.assets,Number(this.c.MAX_SEATS_PER_WALLET),salt);
+   const orderedSnapshot=[...snapshot.assets].sort((a,b)=>a.assetId.localeCompare(b.assetId));
+   const distribution=await tx.holderDistribution.create({data:{
+    id:distributionId,status:'PREPARED',collection:this.c.SEAT_COLLECTION_ADDRESS!,snapshotSlot:snapshot.slot,snapshotHash:allocated.snapshotHash,
+    snapshot:orderedSnapshot as unknown as Prisma.InputJsonValue,totalAmount:total.toString(),eligibleSeats:allocated.eligibleSeats,excludedSeats:allocated.excludedSeats,cutoffAt:cutoff,
+    entries:{create:allocated.allocations.map(row=>({...row,receiptHash:hash({kind:'HOLDER_DISTRIBUTION',distributionId,wallet:row.wallet,amount:row.amount,assetIds:row.assetIds})}))}
+   }});
+   await tx.reward.updateMany({where:{id:{in:rewards.map(row=>row.id)},holderDistributionId:null},data:{holderDistributionId:distribution.id}});
+   return distribution;
+  },this.db);
+ }
+ async payHolderDistributions(){
+  if(this.c.HOLDER_DISTRIBUTIONS_ENABLED!=='true')return{paid:0,pending:0};
+  let paid=0;
+  for(const distribution of await this.db.holderDistribution.findMany({where:{status:{in:['PREPARED','PAYING']}},orderBy:{createdAt:'asc'},take:3})){
+   await this.db.holderDistribution.updateMany({where:{id:distribution.id,status:'PREPARED'},data:{status:'PAYING'}});
+   const entries=await this.db.holderDistributionEntry.findMany({where:{distributionId:distribution.id,state:{in:['CLAIMABLE','PAYING']}},orderBy:{wallet:'asc'},take:25});
+   for(const entry of entries){
+    if(entry.state==='CLAIMABLE'){
+     const claimed=await this.db.holderDistributionEntry.updateMany({where:{id:entry.id,state:'CLAIMABLE'},data:{state:'PAYING',error:null}});if(!claimed.count)continue;
+    }
+    try{
+     const signature=await this.chain.settle('holder:'+distribution.id,entry.wallet,entry.amount,entry.receiptHash);
+     await serial(async tx=>{
+      const changed=await tx.holderDistributionEntry.updateMany({where:{id:entry.id,state:'PAYING'},data:{state:'PAID',signature,error:null}});if(!changed.count)return;
+      await tx.ledgerEntry.upsert({where:{operationKey:'holder:'+entry.id},create:{operationKey:'holder:'+entry.id,workflowId:'holder:'+distribution.id,kind:'HOLDER_DISTRIBUTION',amount:entry.amount,beneficiary:entry.wallet,signature},update:{signature}});
+     },this.db);paid++;
+    }catch(error){
+     const message=(error instanceof Error?error.message:'holder payout failed').slice(0,1000);
+     await this.db.holderDistributionEntry.updateMany({where:{id:entry.id,state:'PAYING'},data:{state:'CLAIMABLE',error:message}});
+    }
+   }
+   const pending=await this.db.holderDistributionEntry.count({where:{distributionId:distribution.id,state:{not:'PAID'}}});
+   if(!pending)await this.db.holderDistribution.updateMany({where:{id:distribution.id,status:{in:['PREPARED','PAYING']}},data:{status:'COMPLETED',completedAt:new Date()}});
+  }
+  return{paid,pending:await this.db.holderDistributionEntry.count({where:{state:{in:['CLAIMABLE','PAYING']}}})};
  }
 }

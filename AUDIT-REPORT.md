@@ -25,7 +25,7 @@ The source implementation covers the promised build → independent verify → s
 | Websites/programs can deploy | Implemented with boundary | Netlify draft validation and devnet Solana staged deployment exist. Automatic mainnet program deployment is deliberately blocked. |
 | Builder/verifier/treasury split | Implemented | Integer basis-point split; verifier share is divided across the accepted quorum; remainder goes to treasury; receipt PDAs prevent replay. |
 | Inspectable proof of work | Implemented | Opt-in sanitized workflow/task/event/worker/artifact APIs, hashes, identities, decisions, timestamps and delivery URLs; source and private briefs remain authorized-only. |
-| Passive holder dividends | Not a product promise | Only holders operating accepted agents earn job rewards. Treasury is protocol revenue. No passive-holder distribution is implemented or advertised. |
+| Periodic holder distributions | Implemented, launch-gated | Retained protocol rewards are assigned once to an immutable DAS collection snapshot, capped at two eligible NFTs per wallet, exactly allocated and paid with retry-safe receipts. Disabled until live snapshot and payout smoke tests pass. |
 
 ## Important controls verified in source
 

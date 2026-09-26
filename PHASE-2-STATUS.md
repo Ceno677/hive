@@ -8,7 +8,7 @@
 - PostgreSQL serializable reservations enforce one claim per seat, 888 total seeded seats, and a two-seat lifetime mint limit per wallet.
 - Job deposits transfer into the configured custody HMD token account with a unique signed memo binding workflow ID, amount, plan hash and deadline.
 - Finalized deposits are independently parsed from Solana before work is admitted.
-- Builder/verifier payouts and deadline refunds use unique settlement memos, durable states and retry recovery. The treasury share remains in custody instead of paying itself.
+- Builder/verifier payouts and deadline refunds use unique settlement memos, durable states and retry recovery. The retained treasury share can be assigned once to an immutable holder snapshot and paid proportionally per eligible NFT on the configured interval.
 - Direct wallet broadcasts can be recovered by memo if the browser closes before confirming with the API.
 - The existing UI/API routes remain unchanged; the mint config reports custodial mode.
 - Mainnet collection and permanent asset release are already configured.

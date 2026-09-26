@@ -469,10 +469,12 @@ If delivery misses JOB_DEADLINE_HOURS, no reward has vested and the scheduler re
 payment. Unique signed SPL memos, database ledger rows and durable payout states make retries
 recoverable and idempotent. This is custodial escrow, not a trustless per-job on-chain vault.
 
-The published product promises earnings for NFT holders who actually operate accepted agents.
-It does not promise passive dividends to every holder. The protocol treasury is for operating
-costs and reserves. A future passive-holder distribution would require a separate, explicitly
-approved legal/tax policy and distributor contract; do not market it as implemented.
+When HOLDER_DISTRIBUTIONS_ENABLED=true, retained protocol rewards are assigned exactly once to
+an immutable DAS collection-holder snapshot after HOLDER_DISTRIBUTION_INTERVAL_HOURS. The
+allocation is proportional per eligible NFT, capped at two eligible seats per wallet, conserves
+every raw HMD unit and uses retry-safe payout receipts. The default interval is 72 hours. Keep
+the feature disabled until the live ownership snapshot, treasury balance and small payout smoke
+test pass, and obtain appropriate legal/tax review before marketing the distribution.
 
 ===============================================================================
 BUY NOW VS WAIT

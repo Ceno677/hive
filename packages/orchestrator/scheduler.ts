@@ -87,5 +87,7 @@ export class Scheduler{
   for(const f of await this.db.workflow.findMany({where:{status:'VERIFYING'},take:10}))
    try{await this.final(f.id);}catch(e){report(e);}
   await this.payments.payRewards();
+  await this.payments.prepareHolderDistribution();
+  await this.payments.payHolderDistributions();
  }
 }

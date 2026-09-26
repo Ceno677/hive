@@ -230,8 +230,45 @@ model Reward {
   receiptHash String
   state String @default("CLAIMABLE")
   signature String?
+  createdAt DateTime @default(now())
+  holderDistributionId String?
+  holderDistribution HolderDistribution? @relation(fields: [holderDistributionId], references: [id])
   @@unique([workflowId, receiptHash, kind])
   @@index([beneficiary, state])
+  @@index([kind, state, holderDistributionId, createdAt])
+}
+model HolderDistribution {
+  id String @id @default(uuid())
+  status String @default("PREPARED")
+  collection String
+  snapshotSlot BigInt
+  snapshotHash String
+  snapshot Json
+  totalAmount String
+  eligibleSeats Int
+  excludedSeats Int @default(0)
+  cutoffAt DateTime
+  createdAt DateTime @default(now())
+  completedAt DateTime?
+  rewards Reward[]
+  entries HolderDistributionEntry[]
+  @@index([status, createdAt])
+}
+model HolderDistributionEntry {
+  id String @id @default(uuid())
+  distributionId String
+  distribution HolderDistribution @relation(fields: [distributionId], references: [id])
+  wallet String
+  assetIds String[]
+  amount String
+  receiptHash String @unique
+  state String @default("CLAIMABLE")
+  signature String?
+  error String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([distributionId, wallet])
+  @@index([state, createdAt])
 }
 model LedgerEntry {
   id String @id @default(uuid())
