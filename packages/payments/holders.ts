@@ -15,7 +15,8 @@ export function allocateHolderRevenue(total:bigint,assets:HolderAsset[],maxSeats
   if(unique.has(asset.assetId))throw new Fault(502,'duplicate_holder_asset');
   unique.set(asset.assetId,asset);
  }
- const ordered=[...unique.values()].sort((a,b)=>{
+ const canonicalAssets=[...unique.values()].sort((a,b)=>a.assetId.localeCompare(b.assetId));
+ const ordered=[...canonicalAssets].sort((a,b)=>{
   const left=createHash('sha256').update(salt+':'+a.assetId).digest('hex');
   const right=createHash('sha256').update(salt+':'+b.assetId).digest('hex');
   return left.localeCompare(right)||a.assetId.localeCompare(b.assetId);
@@ -34,7 +35,7 @@ export function allocateHolderRevenue(total:bigint,assets:HolderAsset[],maxSeats
   row.assetIds.push(asset.assetId);row.amount+=base+(index<remainder?1n:0n);wallets.set(asset.wallet,row);
  });
  const allocations:HolderAllocation[]=[...wallets].filter(([,row])=>row.amount>0n).map(([wallet,row])=>({wallet,assetIds:row.assetIds.sort(),amount:row.amount.toString()})).sort((a,b)=>a.wallet.localeCompare(b.wallet));
- return{allocations,eligibleSeats:accepted.length,excludedSeats:ordered.length-accepted.length,snapshotHash:hash(ordered.map(a=>({assetId:a.assetId,wallet:a.wallet})))};
+ return{allocations,eligibleSeats:accepted.length,excludedSeats:ordered.length-accepted.length,snapshotHash:hash(canonicalAssets.map(a=>({assetId:a.assetId,wallet:a.wallet})))};
 }
 
 export class DasHolderSnapshot implements HolderSnapshotSource{

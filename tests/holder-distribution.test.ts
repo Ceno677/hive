@@ -4,6 +4,7 @@ import bs58 from 'bs58';
 import {allocateHolderRevenue} from '../packages/payments/holders.js';
 import {loadSolanaKeypair} from '../packages/shared/secrets.js';
 import {config,mintKeys,paymentKeys} from '../packages/shared/config.js';
+import {hash} from '../packages/shared/domain.js';
 
 it('allocates every base unit per eligible NFT and caps a wallet at two seats',()=>{
  const ownerA=Keypair.generate().publicKey.toBase58(),ownerB=Keypair.generate().publicKey.toBase58();
@@ -13,6 +14,8 @@ it('allocates every base unit per eligible NFT and caps a wallet at two seats',(
  expect(result.eligibleSeats).toBe(3);expect(result.excludedSeats).toBe(1);
  expect(result.allocations.reduce((sum,row)=>sum+BigInt(row.amount),0n)).toBe(10n);
  expect(result.allocations.find(row=>row.wallet===ownerA)?.assetIds).toHaveLength(2);
+ const canonical=[...assets].sort((a,b)=>a.assetId.localeCompare(b.assetId));
+ expect(result.snapshotHash).toBe(hash(canonical));
 });
 
 it('rejects duplicate assets in a holder snapshot',()=>{
