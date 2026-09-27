@@ -12,6 +12,7 @@ import {resilientConnection} from './chain.js';
 import {createAssociatedTokenAccountIdempotentInstruction,createBurnCheckedInstruction,createTransferCheckedInstruction,getAssociatedTokenAddressSync,getMint,TOKEN_PROGRAM_ID} from './tokens.js';
 
 const MEMO_PROGRAM_ID=new PublicKey('MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr');
+const NFT_ACCOUNT_SIZES=[82,165,679,282];
 const memoInstruction=(text:string,signer:PublicKey)=>new TransactionInstruction({programId:MEMO_PROGRAM_ID,keys:[{pubkey:signer,isSigner:true,isWritable:false}],data:Buffer.from(text)});
 const seatName=(id:number)=>`hive.md Agent #${String(id).padStart(3,'0')}`;
 
@@ -85,6 +86,13 @@ export class CustodialSolanaChain implements Chain {
   if(!this.c.SEAT_COLLECTION_ADDRESS||!this.c.MINT_BASE_URI||!this.c.HMD_BURN_AMOUNT)throw new Fault(503,'mint_not_configured');
   const owner=new PublicKey(wallet),hmd=await this.hmd(),token=await getMint(this.connection,hmd),authority=await this.signer();
   if(mintPriceBaseUnits(token.decimals)!==this.c.HMD_BURN_AMOUNT)throw new Fault(503,'mint_price_mismatch');
+  const source=getAssociatedTokenAddressSync(hmd,owner,false,token.programId),[sourceAccount,solBalance,...rents]=await Promise.all([
+   this.connection.getAccountInfo(source,'finalized'),this.connection.getBalance(owner,'finalized'),...NFT_ACCOUNT_SIZES.map(size=>this.connection.getMinimumBalanceForRentExemption(size,'finalized'))
+  ]);
+  const tokenBalance=sourceAccount&&sourceAccount.owner.equals(token.programId)&&sourceAccount.data.length>=165?sourceAccount.data.readBigUInt64LE(64):0n;
+  if(tokenBalance<BigInt(this.c.HMD_BURN_AMOUNT))throw new Fault(409,'insufficient_hmd_balance','This wallet needs at least 8,888 HMD before minting',{required:this.c.HMD_BURN_AMOUNT,available:tokenBalance.toString()});
+  const requiredSol=rents.reduce((sum,value)=>sum+value,50_000);
+  if(solBalance<requiredSol)throw new Fault(409,'insufficient_sol_balance','This wallet needs enough SOL for NFT account rent and transaction fees',{requiredLamports:requiredSol,availableLamports:solBalance});
   const collectionMint=new PublicKey(this.c.SEAT_COLLECTION_ADDRESS),umi=createUmi(this.c.SOLANA_RPC_URL).use(mplTokenMetadata());
   const collection=await fetchDigitalAsset(umi,publicKey(collectionMint));
   if(collection.metadata.collectionDetails.__option!=='Some'||collection.metadata.updateAuthority!==publicKey(authority.publicKey))throw new Fault(503,'collection_authority_mismatch');
@@ -93,7 +101,7 @@ export class CustodialSolanaChain implements Chain {
   const payer=createNoopSigner(publicKey(owner)),mintPk=mintSigner.publicKey,collectionPk=publicKey(collectionMint);
   const builder=createNft(umi,{mint:mintSigner,payer,authority:authoritySigner,updateAuthority:authoritySigner,tokenOwner:publicKey(owner),name:seatName(seatId),symbol:'HMD',uri:`${this.c.MINT_BASE_URI.replace(/\/$/,'')}/${seatId}.json`,sellerFeeBasisPoints:percentAmount(0),isMutable:false,collection:{key:collectionPk,verified:false}})
    .add(verifyCollectionV1(umi,{authority:authoritySigner,metadata:findMetadataPda(umi,{mint:mintPk}),collectionMint:collectionPk}));
-  const burn=createBurnCheckedInstruction(getAssociatedTokenAddressSync(hmd,owner,false,token.programId),hmd,owner,this.c.HMD_BURN_AMOUNT,token.decimals,token.programId);
+  const burn=createBurnCheckedInstruction(source,hmd,owner,this.c.HMD_BURN_AMOUNT,token.decimals,token.programId);
   const prepared=await this.encode(owner,[burn,...builder.getInstructions().map(toWeb3JsInstruction),memoInstruction(`hive:mint:${id}:${seatId}:${mint.publicKey.toBase58()}`,authority.publicKey)],[authority,mint]);
   return{...prepared,mint:mint.publicKey.toBase58()};
  }

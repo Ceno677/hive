@@ -54,7 +54,16 @@ export class Payments {
    if(current.signature&&current.signature!==signature)throw new Fault(409,'payment_attempt_conflict');
    await tx.chainOperation.update({where:{id:op.id},data:{state:'SUBMITTED',signature}});
   },this.db);
-  try{await this.chain.broadcast(signed);}catch{ /* Unknown RPC outcome is reconciled, never treated as failed payment. */ }
+  try{await this.chain.broadcast(signed);}catch(error){
+   const message=(error instanceof Error?error.message:'transaction broadcast failed').slice(0,1000);
+   const rejected=error instanceof Error&&(error.name==='SendTransactionError'||/simulation failed|blockhash not found|insufficient funds|already been processed/i.test(error.message));
+   if(rejected)await serial(async tx=>{
+    await tx.chainOperation.updateMany({where:{id:op.id,signature},data:{state:'FAILED',error:message}});
+    if(op.mintRequestId)await tx.mintRequest.updateMany({where:{id:op.mintRequestId,state:{in:['PREPARED','SUBMITTED']}},data:{state:'FAILED'}});
+    if(op.workflowId)await tx.workflow.updateMany({where:{id:op.workflowId,status:'AWAITING_FUNDS'},data:{status:'PAYMENT_FAILED',failure:'Solana rejected the payment transaction before broadcast.'}});
+   },this.db);
+   throw new Fault(rejected?409:502,rejected?'transaction_rejected':'broadcast_unconfirmed',rejected?'Solana rejected the transaction before broadcast. No payment was taken.':'The RPC did not confirm the broadcast. Check the transaction status before trying again.');
+  }
   return{signature,state:'SUBMITTED'};
  }
  async reconcile(){
