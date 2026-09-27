@@ -51,7 +51,7 @@ This repository contains the backend and web integration, with the API and sched
 
 ## Deliberately unavailable / further work
 
-- Mainnet auto-deployment, sponsored gas, compressed NFTs and Token-2022 extensions.
+- Mainnet auto-deployment, sponsored gas, compressed NFTs and Token-2022 extensions beyond the metadata-only pump.fun format supported by custodial mode.
 - Arbitrary network profiles/package acquisition: current generated-code execution is network-disabled. Dependency provisioning must use reviewed images.
 - Alternative partial-work/dispute/verifier-rejection compensation policies; the implemented selectable policy vests only at final release.
 - Persistent API hosting adapter beyond source delivery; current integrated web hosting is static Netlify drafts.

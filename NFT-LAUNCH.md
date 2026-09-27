@@ -12,7 +12,7 @@ Users do not install anything. They connect a Solana wallet on the website and c
 - `npm run nft:prepare`: creates a new, non-overwriting publication candidate containing all images, marketplace-compatible item JSON, collection JSON, hashes, rarity data and a mint configuration template.
 - `npm run nft:verify`: independently verifies all 888 images and metadata documents.
 - `npm run nft:collection:create`: guarded one-time creation of the sized Metaplex collection NFT.
-- `npm run nft:bind-hmd`: reads the launched mint from Solana, rejects Token-2022/wrong accounts, reads decimals, and calculates the exact raw burn amount for 8,888 HMD.
+- `npm run nft:bind-hmd`: reads the launched mint from Solana, accepts classic SPL or pump.fun metadata-only Token-2022, rejects accounting-changing extensions/wrong accounts, reads decimals, and calculates the exact raw burn amount for 8,888 HMD.
 
 ## Permanent metadata sequence
 

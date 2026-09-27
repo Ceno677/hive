@@ -29,7 +29,7 @@ The default configuration deliberately has no token addresses, mint price, fee a
 - apps/scheduler: reconciliation, trusted verification, release validation, settlement and outbox publishing.
 - worker/daemon: build/review runtime for project-operated or independent NFT-holder machines. It is never installed by customers who only request builds.
 - packages/database: Prisma schema and versioned SQL migrations.
-- packages/solana: classic SPL Token operations and Metaplex ownership checks.
+- packages/solana: classic SPL/guarded Token-2022 operations and Metaplex ownership checks.
 - packages/solana/custodial.ts: low-cost launch adapter using the existing SPL Token and Metaplex programs. It atomically burns HMD and creates a verified seat, journals deposits with signed memos, and performs idempotent payouts/refunds from the custody wallet.
 - programs/hive: optional future trustless implementation. It is retained and tested but is not required or deployed in the short-launch configuration.
 - packages/execution: containers with no network, host mounts, wallet keys or provider secrets.
@@ -55,7 +55,7 @@ Prices are positive integer token base units, never decimal floats. Mint decimal
 
 Job fees do not fund holder distributions: a successfully delivered job burns the customer's full fee. The existing holder-distribution ledger therefore stays disabled unless a separate treasury-funded holder allocation is introduced and tested. Distribution history and entries remain publicly inspectable through `/api/holder-distributions`.
 
-Only classic SPL Token mints and conventional Metaplex NFTs are supported. Token-2022 extensions, compressed NFTs, gas sponsorship, automatic mainnet program deployment and arbitrary sandbox internet access are intentionally not enabled.
+Custodial mode supports classic SPL Token mints and pump.fun-style Token-2022 mints containing only MetadataPointer/TokenMetadata extensions. Extensions that alter accounting or transfer behavior are rejected. The optional custom program remains classic-SPL-only. Conventional Metaplex NFTs are supported; compressed NFTs, gas sponsorship, automatic mainnet program deployment and arbitrary sandbox internet access are intentionally not enabled.
 
 ## Lean Solana setup
 

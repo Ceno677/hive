@@ -28,7 +28,7 @@ export class CustodialSolanaChain implements Chain {
  }
  private async hmd(){
   if(!this.c.HMD_MINT)throw new Fault(503,'hmd_not_configured');
-  const mint=new PublicKey(this.c.HMD_MINT);await getMint(this.connection,mint,'finalized',TOKEN_PROGRAM_ID);return mint;
+  const mint=new PublicKey(this.c.HMD_MINT);await getMint(this.connection,mint);return mint;
  }
  async tokenInfo(){const mint=await this.hmd(),info=await getMint(this.connection,mint);return{mint:mint.toBase58(),decimals:info.decimals};}
  async validateMintPolicy(){
@@ -58,9 +58,9 @@ export class CustodialSolanaChain implements Chain {
  }
  async prepareFund(wallet:string,id:string,amount:string,planHash:string,deadline:number){
   const payer=new PublicKey(wallet),mint=await this.hmd(),treasury=await this.signer(),info=await getMint(this.connection,mint);
-  const source=getAssociatedTokenAddressSync(mint,payer),destination=getAssociatedTokenAddressSync(mint,treasury.publicKey);
+  const source=getAssociatedTokenAddressSync(mint,payer,false,info.programId),destination=getAssociatedTokenAddressSync(mint,treasury.publicKey,false,info.programId);
   const memo=`hive:fund:${id}:${amount}:${planHash}:${deadline}`;
-  const instructions=[createAssociatedTokenAccountIdempotentInstruction(payer,destination,treasury.publicKey,mint),createTransferCheckedInstruction(source,mint,destination,payer,amount,info.decimals),memoInstruction(memo,payer)];
+  const instructions=[createAssociatedTokenAccountIdempotentInstruction(payer,destination,treasury.publicKey,mint,info.programId),createTransferCheckedInstruction(source,mint,destination,payer,amount,info.decimals,info.programId),memoInstruction(memo,payer)];
   return{...await this.encode(payer,instructions),escrow:`custodial:${id}`};
  }
  private parsedTransfer(transaction:any,source:PublicKey,destination:PublicKey,authority:PublicKey,mint:PublicKey,amount:string){
@@ -75,11 +75,11 @@ export class CustodialSolanaChain implements Chain {
  }
  async funded(wallet:string,id:string,amount:string,planHash:string,deadline:number,signature?:string){
   if(!signature)return false;
-  const payer=new PublicKey(wallet),mint=await this.hmd(),treasury=await this.signer();
+  const payer=new PublicKey(wallet),mint=await this.hmd(),treasury=await this.signer(),token=await getMint(this.connection,mint);
   const tx=await this.connection.getParsedTransaction(signature,{commitment:'finalized',maxSupportedTransactionVersion:0});
   if(!tx||tx.meta?.err)return false;
   const signed=tx.transaction.message.accountKeys.some(key=>key.pubkey.equals(payer)&&key.signer);
-  return signed&&this.parsedTransfer(tx,getAssociatedTokenAddressSync(mint,payer),getAssociatedTokenAddressSync(mint,treasury.publicKey),payer,mint,amount)&&this.parsedMemo(tx,`hive:fund:${id}:${amount}:${planHash}:${deadline}`);
+  return signed&&this.parsedTransfer(tx,getAssociatedTokenAddressSync(mint,payer,false,token.programId),getAssociatedTokenAddressSync(mint,treasury.publicKey,false,token.programId),payer,mint,amount)&&this.parsedMemo(tx,`hive:fund:${id}:${amount}:${planHash}:${deadline}`);
  }
  async prepareMint(wallet:string,id:string,seatId:number){
   if(!this.c.SEAT_COLLECTION_ADDRESS||!this.c.MINT_BASE_URI||!this.c.HMD_BURN_AMOUNT)throw new Fault(503,'mint_not_configured');
@@ -93,7 +93,7 @@ export class CustodialSolanaChain implements Chain {
   const payer=createNoopSigner(publicKey(owner)),mintPk=mintSigner.publicKey,collectionPk=publicKey(collectionMint);
   const builder=createNft(umi,{mint:mintSigner,payer,authority:authoritySigner,updateAuthority:authoritySigner,tokenOwner:publicKey(owner),name:seatName(seatId),symbol:'HMD',uri:`${this.c.MINT_BASE_URI.replace(/\/$/,'')}/${seatId}.json`,sellerFeeBasisPoints:percentAmount(0),isMutable:false,collection:{key:collectionPk,verified:false}})
    .add(verifyCollectionV1(umi,{authority:authoritySigner,metadata:findMetadataPda(umi,{mint:mintPk}),collectionMint:collectionPk}));
-  const burn=createBurnCheckedInstruction(getAssociatedTokenAddressSync(hmd,owner),hmd,owner,this.c.HMD_BURN_AMOUNT,token.decimals);
+  const burn=createBurnCheckedInstruction(getAssociatedTokenAddressSync(hmd,owner,false,token.programId),hmd,owner,this.c.HMD_BURN_AMOUNT,token.decimals,token.programId);
   const prepared=await this.encode(owner,[burn,...builder.getInstructions().map(toWeb3JsInstruction),memoInstruction(`hive:mint:${id}:${seatId}:${mint.publicKey.toBase58()}`,authority.publicKey)],[authority,mint]);
   return{...prepared,mint:mint.publicKey.toBase58()};
  }
@@ -133,7 +133,7 @@ export class CustodialSolanaChain implements Chain {
   const authority=await this.signer();
   if(kind==='MINT')return this.signatureWithMemo(authority.publicKey,`hive:mint:${id}:${seatId}:`);
   if(kind==='FUND'){
-   const mint=await this.hmd();return this.signatureWithMemo(getAssociatedTokenAddressSync(mint,authority.publicKey),`hive:fund:${id}:`);
+   const mint=await this.hmd(),token=await getMint(this.connection,mint);return this.signatureWithMemo(getAssociatedTokenAddressSync(mint,authority.publicKey,false,token.programId),`hive:fund:${id}:`);
   }
   return null;
  }
@@ -142,10 +142,10 @@ export class CustodialSolanaChain implements Chain {
   if(s?.err)return'FAILED';if(s?.confirmationStatus==='finalized')return'FINALIZED';if(!s&&await this.connection.getBlockHeight('finalized')>lastValidHeight)return'EXPIRED';return'PENDING';
  }
  async treasuryBalance(){
-  const authority=await this.signer(),mint=await this.hmd(),source=getAssociatedTokenAddressSync(mint,authority.publicKey);
+  const authority=await this.signer(),mint=await this.hmd(),token=await getMint(this.connection,mint),source=getAssociatedTokenAddressSync(mint,authority.publicKey,false,token.programId);
   const account=await this.connection.getAccountInfo(source,'finalized');
   if(!account)return 0n;
-  if(!account.owner.equals(TOKEN_PROGRAM_ID)||account.data.length!==165)throw new Fault(503,'treasury_token_account_invalid');
+  if(!account.owner.equals(token.programId)||account.data.length<165)throw new Fault(503,'treasury_token_account_invalid');
   return account.data.readBigUInt64LE(64);
  }
  async broadcast(transaction:string){
@@ -163,22 +163,22 @@ export class CustodialSolanaChain implements Chain {
  async settle(_id:string,beneficiary:string,amount:string,receipt:string,_refund=false){
   const authority=await this.signer(),mint=await this.hmd(),token=await getMint(this.connection,mint),to=new PublicKey(beneficiary);
   if(to.equals(authority.publicKey))throw new Fault(409,'treasury_share_requires_no_transfer');
-  const source=getAssociatedTokenAddressSync(mint,authority.publicKey),destination=getAssociatedTokenAddressSync(mint,to),memo=`hive:settle:${receipt}`;
+  const source=getAssociatedTokenAddressSync(mint,authority.publicKey,false,token.programId),destination=getAssociatedTokenAddressSync(mint,to,false,token.programId),memo=`hive:settle:${receipt}`;
   const prior=await this.priorSettlement(source,memo,destination,mint,amount,authority.publicKey);if(prior)return prior;
   const block=await this.connection.getLatestBlockhash('finalized');
-  const tx=new Transaction({feePayer:authority.publicKey,...block}).add(createAssociatedTokenAccountIdempotentInstruction(authority.publicKey,destination,to,mint),createTransferCheckedInstruction(source,mint,destination,authority.publicKey,amount,token.decimals),memoInstruction(memo,authority.publicKey));
+  const tx=new Transaction({feePayer:authority.publicKey,...block}).add(createAssociatedTokenAccountIdempotentInstruction(authority.publicKey,destination,to,mint,token.programId),createTransferCheckedInstruction(source,mint,destination,authority.publicKey,amount,token.decimals,token.programId),memoInstruction(memo,authority.publicKey));
   tx.sign(authority);const signature=await this.connection.sendRawTransaction(tx.serialize(),{skipPreflight:false,maxRetries:3});
   const result=await this.connection.confirmTransaction({...block,signature},'finalized');if(result.value.err)throw new Fault(502,'settlement_failed');return signature;
  }
  async burnFee(_id:string,amount:string,receipt:string){
-  const authority=await this.signer(),mint=await this.hmd(),token=await getMint(this.connection,mint),source=getAssociatedTokenAddressSync(mint,authority.publicKey),memo=`hive:burn:${receipt}`;
+  const authority=await this.signer(),mint=await this.hmd(),token=await getMint(this.connection,mint),source=getAssociatedTokenAddressSync(mint,authority.publicKey,false,token.programId),memo=`hive:burn:${receipt}`;
   for(const row of await this.connection.getSignaturesForAddress(source,{limit:1000},'finalized')){
    if(row.err)continue;
    const tx=await this.connection.getParsedTransaction(row.signature,{commitment:'finalized',maxSupportedTransactionVersion:0});
    if(tx&&!tx.meta?.err&&this.parsedMemo(tx,memo)&&this.parsedBurn(tx,source,mint,authority.publicKey,amount))return row.signature;
   }
   const block=await this.connection.getLatestBlockhash('finalized');
-  const tx=new Transaction({feePayer:authority.publicKey,...block}).add(createBurnCheckedInstruction(source,mint,authority.publicKey,amount,token.decimals),memoInstruction(memo,authority.publicKey));
+  const tx=new Transaction({feePayer:authority.publicKey,...block}).add(createBurnCheckedInstruction(source,mint,authority.publicKey,amount,token.decimals,token.programId),memoInstruction(memo,authority.publicKey));
   tx.sign(authority);const signature=await this.connection.sendRawTransaction(tx.serialize(),{skipPreflight:false,maxRetries:3});
   const result=await this.connection.confirmTransaction({...block,signature},'finalized');if(result.value.err)throw new Fault(502,'fee_burn_failed');return signature;
  }

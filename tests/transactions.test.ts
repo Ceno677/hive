@@ -3,7 +3,7 @@ import {createHash} from 'node:crypto';
 import {SolanaChain} from '../packages/solana/chain.js';
 import {CustodialSolanaChain} from '../packages/solana/custodial.js';
 import {createChain} from '../packages/solana/factory.js';
-import {createAssociatedTokenAccountIdempotentInstruction,createBurnCheckedInstruction,createTransferCheckedInstruction,getAssociatedTokenAddressSync,TOKEN_PROGRAM_ID} from '../packages/solana/tokens.js';
+import {createAssociatedTokenAccountIdempotentInstruction,createBurnCheckedInstruction,createTransferCheckedInstruction,getAssociatedTokenAddressSync,getMint,TOKEN_2022_PROGRAM_ID,TOKEN_PROGRAM_ID} from '../packages/solana/tokens.js';
 import {digest} from '../packages/shared/domain.js';
 import {Keypair,Transaction,SystemProgram} from '@solana/web3.js';
 import {sameMessage} from '../packages/payments/requests.js';
@@ -50,6 +50,30 @@ it('encodes official SPL idempotent ATA, transfer-checked and burn-checked instr
  expect([...ata.data]).toEqual([1]);expect(ata.keys[0]).toMatchObject({isSigner:true,isWritable:true});
  expect(transfer.programId.equals(TOKEN_PROGRAM_ID)).toBe(true);expect(transfer.data[0]).toBe(12);expect(transfer.data.readBigUInt64LE(1)).toBe(8888000000n);expect(transfer.data[9]).toBe(6);
  expect(burn.programId.equals(TOKEN_PROGRAM_ID)).toBe(true);expect(burn.data[0]).toBe(15);expect(burn.data.readBigUInt64LE(1)).toBe(8888000000n);expect(burn.keys[2]).toMatchObject({isSigner:true});
+});
+it('derives and encodes Token-2022 payment instructions with the mint program',()=>{
+ const payer=wallet.publicKey,mint=Keypair.generate().publicKey,recipient=Keypair.generate().publicKey;
+ const source=getAssociatedTokenAddressSync(mint,payer,false,TOKEN_2022_PROGRAM_ID),destination=getAssociatedTokenAddressSync(mint,recipient,false,TOKEN_2022_PROGRAM_ID);
+ const ata=createAssociatedTokenAccountIdempotentInstruction(payer,destination,recipient,mint,TOKEN_2022_PROGRAM_ID);
+ const transfer=createTransferCheckedInstruction(source,mint,destination,payer,8888000000n,6,TOKEN_2022_PROGRAM_ID);
+ const burn=createBurnCheckedInstruction(source,mint,payer,8888000000n,6,TOKEN_2022_PROGRAM_ID);
+ expect(ata.keys[5].pubkey.equals(TOKEN_2022_PROGRAM_ID)).toBe(true);
+ expect(transfer.programId.equals(TOKEN_2022_PROGRAM_ID)).toBe(true);
+ expect(burn.programId.equals(TOKEN_2022_PROGRAM_ID)).toBe(true);
+ expect(source.equals(getAssociatedTokenAddressSync(mint,payer))).toBe(false);
+});
+function token2022Mint(extension:number){
+ const extensionLength=extension===18?64:8,data=Buffer.alloc(166+4+extensionLength);
+ data.writeBigUInt64LE(1_000_000_000_000_000n,36);data[44]=6;data[45]=1;data[165]=1;
+ data.writeUInt16LE(extension,166);data.writeUInt16LE(extensionLength,168);return data;
+}
+it('accepts pump.fun metadata-only Token-2022 mints and rejects accounting extensions',async()=>{
+ const mint=Keypair.generate().publicKey;
+ const safe={owner:TOKEN_2022_PROGRAM_ID,data:token2022Mint(18),executable:false,lamports:1,rentEpoch:0};
+ const connection={getAccountInfo:vi.fn().mockResolvedValue(safe)} as any;
+ await expect(getMint(connection,mint)).resolves.toMatchObject({decimals:6,supply:1_000_000_000_000_000n,extensions:[18]});
+ connection.getAccountInfo.mockResolvedValue({...safe,data:token2022Mint(1)});
+ await expect(getMint(connection,mint)).rejects.toMatchObject({code:'unsupported_token_extension'});
 });
 it('confirms the original mint receipt after transfer without granting ownership',async()=>{
  const chain=new SolanaChain(config({HIVE_PROGRAM_ID:Keypair.generate().publicKey.toBase58()}));

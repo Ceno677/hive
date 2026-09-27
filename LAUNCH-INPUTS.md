@@ -4,7 +4,7 @@ Confirmed: one NFT burns **8,888 HMD**. Users build in the website, without loca
 
 ## Public information and product choices
 
-1. HMD token mint address and intended network when it launches. `npm run nft:bind-hmd` verifies the live classic SPL mint, reads decimals and calculates the exact raw amount for 8,888 HMD. Token-2022 is not supported.
+1. HMD token mint address and intended network when it launches. `npm run nft:bind-hmd` verifies the live classic SPL or pump.fun metadata-only Token-2022 mint, rejects transfer/accounting extensions, reads decimals and calculates the exact raw amount for 8,888 HMD.
 2. Permanent Arweave images, metadata and the mainnet collection are complete. Confirm public `arweave.net` propagation before opening minting.
 3. Public website domain and where its frontend is currently hosted.
 4. Confirmed wallet cap: two NFTs per wallet.
