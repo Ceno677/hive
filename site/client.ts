@@ -198,6 +198,10 @@ async function viewFlow(id:string){
   },true);
  }
  content.append(list);
+ if(['QUOTED','AWAITING_FUNDS'].includes(flow.status))action('REVIEW PAYMENT',async()=>{
+  const prepared=await withFreshSession(()=>api('/requests/'+id+'/prepare-payment',{})),transaction=await sign(prepared);
+  await api('/requests/'+id+'/submit',{transaction});await viewFlow(id);
+ });
  action('VIEW BUILD PROOF',()=>showProof(id),true);
  for(const release of flow.releases??[]){
   content.append(element('p',release.kind.replaceAll('_',' ')+' / '+release.state.replaceAll('_',' ')));
