@@ -72,7 +72,7 @@ export async function hmdUsdPrice(c:Config,mint:string,now=Date.now()):Promise<T
  })).filter(row=>row.chain==='solana'&&row.base===mint&&Number.isFinite(row.priceNumber)&&row.priceNumber>0&&Number.isFinite(row.liquidity)&&row.liquidity>0)
   .sort((a,b)=>b.liquidity-a.liquidity).slice(0,10);
  const liquidity=rows.reduce((sum,row)=>sum+row.liquidity,0);
- if(!rows.length||liquidity<c.HMD_PRICE_MIN_LIQUIDITY_USD)throw new Fault(503,'token_price_illiquid','HMD liquidity is below the safe quote threshold',{requiredUsd:c.HMD_PRICE_MIN_LIQUIDITY_USD,observedUsd:Math.floor(liquidity)});
+ if(!rows.length||liquidity<c.HMD_PRICE_MIN_LIQUIDITY_USD)throw new Fault(503,'token_price_illiquid','hive liquidity is below the safe quote threshold',{requiredUsd:c.HMD_PRICE_MIN_LIQUIDITY_USD,observedUsd:Math.floor(liquidity)});
  const material=rows.filter(row=>row.liquidity>=rows[0].liquidity*.2),low=Math.min(...material.map(row=>row.priceNumber)),high=Math.max(...material.map(row=>row.priceNumber));
  if(material.length>1&&((high-low)/low)*10000>c.HMD_PRICE_MAX_DEVIATION_BPS)throw new Fault(503,'token_price_disagreement');
  const target=liquidity/2;let running=0,selected=rows[0];
@@ -102,7 +102,7 @@ export async function createJobPricing(input:{c:Config;model:Model;prompt:string
  const marketCents=ceilDiv(hourTenths*rateCents,10n);
  const rawCharge=ceilDiv(marketCents*BigInt(input.c.JOB_PRICE_MARKET_BPS),10000n);
  const chargedCents=rawCharge<BigInt(input.c.JOB_MIN_PRICE_USD*100)?BigInt(input.c.JOB_MIN_PRICE_USD*100):rawCharge>BigInt(input.c.JOB_MAX_PRICE_USD*100)?BigInt(input.c.JOB_MAX_PRICE_USD*100):rawCharge;
- if(token.source==='dexscreener'&&chargedCents*10000n>BigInt(token.liquidityUsd*100)*BigInt(input.c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS))throw new Fault(503,'token_price_depth_insufficient','The HMD market is too shallow for a reliable quote of this size',{chargedPriceUsd:money(chargedCents),liquidityUsd:token.liquidityUsd});
+ if(token.source==='dexscreener'&&chargedCents*10000n>BigInt(token.liquidityUsd*100)*BigInt(input.c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS))throw new Fault(503,'token_price_depth_insufficient','The hive market is too shallow for a reliable quote of this size',{chargedPriceUsd:money(chargedCents),liquidityUsd:token.liquidityUsd});
  const amountBaseUnits=amountForUsd(chargedCents,token.usd,input.decimals),marketAmountBaseUnits=amountForUsd(marketCents,token.usd,input.decimals),expiresAt=new Date(now+input.c.JOB_QUOTE_TTL_SECONDS*1000).toISOString();
  return{version:1,currency:'USD',estimatedHours:hours,complexity:estimate.complexity,confidence:estimate.confidence,factors:estimate.factors,sources:estimate.sources,
   marketRateUsd:estimate.marketRateUsd,marketPriceUsd:money(marketCents),chargedPriceUsd:money(chargedCents),marketPercentageBps:input.c.JOB_PRICE_MARKET_BPS,

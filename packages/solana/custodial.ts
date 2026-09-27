@@ -90,7 +90,7 @@ export class CustodialSolanaChain implements Chain {
    this.connection.getAccountInfo(source,'finalized'),this.connection.getBalance(owner,'finalized'),...NFT_ACCOUNT_SIZES.map(size=>this.connection.getMinimumBalanceForRentExemption(size,'finalized'))
   ]);
   const tokenBalance=sourceAccount&&sourceAccount.owner.equals(token.programId)&&sourceAccount.data.length>=165?sourceAccount.data.readBigUInt64LE(64):0n;
-  if(tokenBalance<BigInt(this.c.HMD_BURN_AMOUNT))throw new Fault(409,'insufficient_hmd_balance','This wallet needs at least 8,888 HMD before minting',{required:this.c.HMD_BURN_AMOUNT,available:tokenBalance.toString()});
+  if(tokenBalance<BigInt(this.c.HMD_BURN_AMOUNT))throw new Fault(409,'insufficient_hmd_balance','This wallet needs at least 8,888 hive before minting',{required:this.c.HMD_BURN_AMOUNT,available:tokenBalance.toString()});
   const requiredSol=rents.reduce((sum,value)=>sum+value,50_000);
   if(solBalance<requiredSol)throw new Fault(409,'insufficient_sol_balance','This wallet needs enough SOL for NFT account rent and transaction fees',{requiredLamports:requiredSol,availableLamports:solBalance});
   const collectionMint=new PublicKey(this.c.SEAT_COLLECTION_ADDRESS),umi=createUmi(this.c.SOLANA_RPC_URL).use(mplTokenMetadata());

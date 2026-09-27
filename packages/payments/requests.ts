@@ -123,7 +123,7 @@ export class Payments {
  async mintQuote(wallet:string,key:string){
   this.require(mintKeys(this.c));
   if(!this.chain.tokenInfo)throw new Fault(503,'token_information_unavailable');
-  if(mintPriceBaseUnits((await this.chain.tokenInfo()).decimals)!==this.c.HMD_BURN_AMOUNT)throw new Fault(503,'mint_price_mismatch','Mint price must equal 8,888 HMD');
+  if(mintPriceBaseUnits((await this.chain.tokenInfo()).decimals)!==this.c.HMD_BURN_AMOUNT)throw new Fault(503,'mint_price_mismatch','Mint price must equal 8,888 hive');
   return serial(async tx=>{
    // Serialize the draw so two simultaneous requests cannot reserve the same seat.
    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hive-random-mint'))`;

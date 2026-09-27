@@ -25,7 +25,7 @@ async function api(path:string,body?:unknown){
  const r=await fetch('/api'+path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:{'content-type':'application/json',...(csrf?{'x-csrf-token':csrf}:{})},body:body===undefined?undefined:JSON.stringify(body)});
  const d=await r.json().catch(()=>({}));
  if(!r.ok){
- const messages:Record<string,string>={sign_in_required:'Connect your wallet to continue.',session_expired:'Please reconnect your wallet.',nft_required:'Hold at least one hive.md NFT in this wallet to request a build.',integration_not_configured:'The network is not open for transactions yet.',execution_not_configured:'The build service is not available yet.',independent_capacity_unavailable:'The hive is waiting for available build and review agents. Try again shortly.',planner_output_invalid:'Planning could not produce a valid build plan. Please retry.',model_request_failed:'The planning model is temporarily unavailable. Please retry.',model_output_truncated:'The requested project needs a smaller brief. Please shorten it and retry.',seat_unavailable:'That seat has already been minted.',seat_reserved:'Someone is currently minting that seat. Choose another.',insufficient_hmd_balance:'This wallet needs at least 8,888 HMD to mint.',insufficient_sol_balance:'This wallet needs more SOL for NFT rent and network fees.',transaction_rejected:'Solana rejected the transaction. Nothing was burned or minted.',broadcast_unconfirmed:'The RPC could not confirm submission. Check the transaction before trying again.',quote_not_payable:'This quote expired. Request a new quote.',payment_not_finalized:'Your transaction is still confirming.',refund_not_available:'The escrow refund is not available yet.',csrf_required:'Please reconnect your wallet.',transaction_mismatch:'The transaction changed. Request a new quote.',human_verification_required:'Complete the anti-bot check to request a quote.',human_verification_failed:'The anti-bot check expired. Please try again.',human_verification_unavailable:'The anti-bot service is temporarily unavailable.',repository_not_connected:'Connect this GitHub repository before delivery.',repository_workflows_not_allowed:'Choose a clean delivery repository without GitHub Actions workflows.',repository_tree_too_large:'Choose a smaller clean repository for delivery.',github_authorization_failed:'GitHub authorization failed. Please reconnect GitHub.'};
+ const messages:Record<string,string>={sign_in_required:'Connect your wallet to continue.',session_expired:'Please reconnect your wallet.',nft_required:'Hold at least one hive.md NFT in this wallet to request a build.',integration_not_configured:'The network is not open for transactions yet.',execution_not_configured:'The build service is not available yet.',independent_capacity_unavailable:'The hive is waiting for available build and review agents. Try again shortly.',planner_output_invalid:'Planning could not produce a valid build plan. Please retry.',model_request_failed:'The planning model is temporarily unavailable. Please retry.',model_output_truncated:'The requested project needs a smaller brief. Please shorten it and retry.',seat_unavailable:'That seat has already been minted.',seat_reserved:'Someone is currently minting that seat. Choose another.',insufficient_hmd_balance:'This wallet needs at least 8,888 hive to mint.',insufficient_sol_balance:'This wallet needs more SOL for NFT rent and network fees.',transaction_rejected:'Solana rejected the transaction. Nothing was burned or minted.',broadcast_unconfirmed:'The RPC could not confirm submission. Check the transaction before trying again.',quote_not_payable:'This quote expired. Request a new quote.',payment_not_finalized:'Your transaction is still confirming.',refund_not_available:'The escrow refund is not available yet.',csrf_required:'Please reconnect your wallet.',transaction_mismatch:'The transaction changed. Request a new quote.',human_verification_required:'Complete the anti-bot check to request a quote.',human_verification_failed:'The anti-bot check expired. Please try again.',human_verification_unavailable:'The anti-bot service is temporarily unavailable.',repository_not_connected:'Connect this GitHub repository before delivery.',repository_workflows_not_allowed:'Choose a clean delivery repository without GitHub Actions workflows.',repository_tree_too_large:'Choose a smaller clean repository for delivery.',github_authorization_failed:'GitHub authorization failed. Please reconnect GitHub.'};
   const unavailable=r.status===408||r.status===499||r.status>=500?'Planning timed out before the quote was ready. Please retry; nothing was charged.':'The network could not complete this request.';
   const error=Error(messages[d.error]??d.message??unavailable);
   (error as any).code=d.error;throw error;
@@ -131,7 +131,7 @@ async function mint(){
  await ensure();
  show('NFT SEAT','Take your seat.');
  const config=await api('/mint/config');
- content.append(element('p','Burn 8,888 $HMD to mint one random identity. One click opens the wallet confirmation; after signing, the NFT is issued in the same transaction.'));
+ content.append(element('p','Burn 8,888 $hive to mint one random identity. One click opens the wallet confirmation; after signing, the NFT is issued in the same transaction.'));
  if(!config.enabled){status('Seat minting is not open yet.');return;}
  const availability=await api('/mint/availability');
  if(!availability.available){status('All 888 NFT seats are minted or currently reserved.');return;}
@@ -158,7 +158,7 @@ async function draft(){
  show('BUILD REQUEST','What shall we build?');
  if(prompt.length<12){status('Describe your project in at least 12 characters.');return;}
  content.append(element('p',prompt,'draft-text'));
- content.append(element('p','Hold at least one hive.md NFT in this wallet to access the agents. The hive will plan your project and show a separate quote in $HMD. Your work stays private.'));
+ content.append(element('p','Hold at least one hive.md NFT in this wallet to access the agents. The hive will plan your project and show a separate quote in $hive. Your work stays private.'));
  let mode='BUILD';const choices=element('div','','dialog-actions');choices.setAttribute('role','group');choices.setAttribute('aria-label','Project type');
  for(const [value,label]of [['BUILD','WEBSITE / CODE'],['SOLANA_APP','SOLANA APP + WEBSITE']]){const option=element('button',(value===mode?'[ SELECTED ] ':'')+label,'outline');option.type='button';option.setAttribute('aria-pressed',String(value===mode));option.onclick=()=>{mode=value;for(const b of Array.from(choices.children) as HTMLButtonElement[]){const selected=b===option;b.setAttribute('aria-pressed',String(selected));b.textContent=(selected?'[ SELECTED ] ':'')+b.dataset.label;} };option.dataset.label=label;choices.append(option);}content.append(choices);
  action('GET MY QUOTE ↗',async()=>{
@@ -167,12 +167,12 @@ async function draft(){
   const requestKey=crypto.randomUUID(),quoteBody={requestKey,prompt,public:false,mode,...(turnstileToken?{turnstileToken}:{})};
   const q=await withFreshSession(()=>api('/requests/quote',quoteBody));
   show('YOUR QUOTE',q.title);
-  const token=await api('/token');content.append(element('p',amount(q.amount,token.decimals)+' $HMD'));
+  const token=await api('/token');content.append(element('p',amount(q.amount,token.decimals)+' $hive'));
   if(q.pricing){
    content.append(element('p','NORMAL MARKET ESTIMATE / $'+q.pricing.marketPriceUsd+' USD'));
    content.append(element('p','HIVE PRICE / $'+q.pricing.chargedPriceUsd+' USD / '+(q.pricing.marketPercentageBps/100)+'% OF MARKET'));
    content.append(element('p','DIFFICULTY / '+q.pricing.complexity+' / '+q.pricing.estimatedHours+' MARKET HOURS @ $'+q.pricing.marketRateUsd+'/HR'));
-   content.append(element('p',q.pricing.tokenPriceSource==='manual'?'$HMD RATE / $'+q.pricing.tokenPriceUsd+' / MANUAL LAUNCH PRICE':'$HMD RATE / $'+q.pricing.tokenPriceUsd+' / LIQUIDITY $'+q.pricing.tokenLiquidityUsd.toLocaleString()));
+   content.append(element('p',q.pricing.tokenPriceSource==='manual'?'$hive RATE / $'+q.pricing.tokenPriceUsd+' / MANUAL LAUNCH PRICE':'$hive RATE / $'+q.pricing.tokenPriceUsd+' / LIQUIDITY $'+q.pricing.tokenLiquidityUsd.toLocaleString()));
    content.append(element('p','MARKET CHECK / '+q.pricing.sources.length+' CURRENT SOURCES'));
    for(const source of q.pricing.sources){const row=element('p'),link=element('a',source.title+' ↗');link.href=source.url;link.target='_blank';link.rel='noopener noreferrer';row.append(link);content.append(row);}
    content.append(element('p','QUOTE LOCKED UNTIL / '+new Date(q.pricing.expiresAt).toLocaleTimeString()));
@@ -180,7 +180,7 @@ async function draft(){
   content.append(element('p','SUCCESS / YOUR FULL JOB FEE IS BURNED / AGENTS ARE PAID FROM TREASURY'));
   content.append(element('p','DELIVERY DEADLINE / '+q.deadlineHours+' HOURS AFTER PAYMENT'));
   for(const t of q.plan.tasks)content.append(element('p',t.title));
-  content.append(element('p','Review the $HMD amount and network fee in your wallet. Successful delivery burns this fee. A missed deadline returns it in full.'));
+  content.append(element('p','Review the $hive amount and network fee in your wallet. Successful delivery burns this fee. A missed deadline returns it in full.'));
   action('REVIEW PAYMENT ↗',async()=>{
    const prepared=await api('/requests/'+q.id+'/prepare-payment',{}),transaction=await sign(prepared);
    await api('/requests/'+q.id+'/submit',{transaction});await viewFlow(q.id);

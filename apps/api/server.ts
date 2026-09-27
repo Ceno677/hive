@@ -119,7 +119,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   holderDistributions:{enabled:c.HOLDER_DISTRIBUTIONS_ENABLED==='true',intervalHours:c.HOLDER_DISTRIBUTION_INTERVAL_HOURS},
   security:{turnstileSiteKey:c.TURNSTILE_SITE_KEY??null}
  }));
- app.get('/api/token',async()=>{if(!c.HMD_MINT||!chain.tokenInfo)throw new Fault(503,'integration_not_configured');return chain.tokenInfo();});
+ app.get('/api/token',async()=>{if(!c.HMD_MINT||!chain.tokenInfo)throw new Fault(503,'integration_not_configured');return{...await chain.tokenInfo(),symbol:'hive'};});
  app.post('/api/auth/challenge',{config:{rateLimit:{max:10,timeWindow:'1 minute'}}},async r=>{
   const {wallet}=z.object({wallet:keySchema}).strict().parse(r.body);
   try{new PublicKey(wallet);}catch{throw new Fault(400,'invalid_wallet');}
@@ -137,7 +137,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   reply.clearCookie('hive_session',{path:'/'});return{ok:true};
  });
  app.get('/api/seats/mine',async r=>{const w=await wallet(r);return db.seat.findMany({where:{ownerWallet:w},select:{id:true,mint:true,checkedAt:true}});});
- app.get('/api/mint/config',async()=>({enabled:!missing(c,mintRequired).length,amount:c.HMD_BURN_AMOUNT??null,displayAmount:'8888',token:'HMD',tokenMint:c.HMD_MINT??null,cluster:c.SOLANA_CLUSTER,supply:888,perWallet:c.MAX_SEATS_PER_WALLET??null,sponsored:false,mode:c.PAYMENT_MODE}));
+ app.get('/api/mint/config',async()=>({enabled:!missing(c,mintRequired).length,amount:c.HMD_BURN_AMOUNT??null,displayAmount:'8888',token:'hive',tokenMint:c.HMD_MINT??null,cluster:c.SOLANA_CLUSTER,supply:888,perWallet:c.MAX_SEATS_PER_WALLET??null,sponsored:false,mode:c.PAYMENT_MODE}));
  app.get('/api/mint/availability',async()=>{
   const [seats,reservations]=await Promise.all([
    db.seat.findMany({where:{mint:null},orderBy:{id:'asc'},select:{id:true}}),
