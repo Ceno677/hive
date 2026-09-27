@@ -84,14 +84,13 @@ async function mint(){
  content.append(element('p','Burn 8,888 $HMD to mint one of the 888 approved identities. Review the exact amount and network fee in your wallet before approving.'));
  if(!config.enabled){status('Seat minting is not open yet.');return;}
  const availability=await api('/mint/availability');
- if(!availability.next){status('All 888 NFT seats are minted or currently reserved.');return;}
- content.append(element('p',availability.remaining+' SEATS AVAILABLE / NEXT '+String(availability.next).padStart(3,'0')));
+ if(!availability.available){status('All 888 NFT seats are minted or currently reserved.');return;}
+ content.append(element('p',availability.remaining+' RANDOM NFT SEATS AVAILABLE'));
+ content.append(element('p','Your NFT identity is selected randomly from the remaining collection when you request the mint.'));
  await ensure();
- const label=element('label','CHOOSE YOUR SEAT / 1–888'),input=element('input');input.type='number';input.min='1';input.max='888';input.value=String(availability.next);input.setAttribute('aria-label','NFT seat number');
- label.append(input);content.append(label);
  action('REVIEW MINT ↗',async()=>{
-  const quote=await api('/mint/quote',{requestKey:crypto.randomUUID(),seatId:Number(input.value)});
-  show('MINT REVIEW','Seat #'+quote.seatId);
+  const quote=await api('/mint/quote',{requestKey:crypto.randomUUID()});
+  show('MINT REVIEW','Random seat #'+String(quote.seatId).padStart(3,'0'));
   const token=await api('/token');content.append(element('p','BURN '+amount(quote.amount,token.decimals)+' $HMD / '+config.cluster.toUpperCase()));
   content.append(element('p','Your wallet will show the $HMD burn amount and SOL network fee. Your NFT is issued in the same transaction.'));
   action('APPROVE IN WALLET ↗',async()=>{

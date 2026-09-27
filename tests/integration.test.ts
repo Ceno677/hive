@@ -54,15 +54,25 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   const response=await server.app.inject('/ready');expect(response.statusCode).toBe(200);
   expect(response.json()).toEqual({status:'ready',dependencies:{postgres:'ok',redis:'ok'}});
  });
- it('offers the next unminted and unreserved NFT seat',async()=>{
+ it('reports unminted and unreserved random NFT availability',async()=>{
   await db.seat.createMany({data:[{id:1,imageHash:'availability-1'},{id:2,imageHash:'availability-2'}]});
   const initial=(await server.app.inject('/api/mint/availability')).json();
-  expect(initial.next).toBe(1);expect(initial.remaining).toBe(2);
+  expect(initial.available).toBe(true);expect(initial.remaining).toBe(2);
   const reservation=await db.mintRequest.create({data:{wallet,requestKey:randomUUID(),inputHash:'availability-test',seatId:1,amount:'8888',expiresAt:new Date(Date.now()+60000)}});
   const reserved=(await server.app.inject('/api/mint/availability')).json();
-  expect(reserved.next).toBe(2);expect(reserved.remaining).toBe(1);expect(reserved.available).not.toContain(1);
-  await db.mintRequest.delete({where:{id:reservation.id}});
-  await db.seat.deleteMany({where:{id:{in:[1,2]}}});
+  expect(reserved.available).toBe(true);expect(reserved.remaining).toBe(1);
+ await db.mintRequest.delete({where:{id:reservation.id}});
+ await db.seat.deleteMany({where:{id:{in:[1,2]}}});
+ });
+ it('randomly assigns distinct remaining seats and keeps request retries idempotent',async()=>{
+  await db.seat.createMany({data:[{id:4,imageHash:'random-4'},{id:5,imageHash:'random-5'}]});
+  const mintConfig=config({NODE_ENV:'test',PAYMENT_MODE:'custodial',HMD_MINT:Keypair.generate().publicKey.toBase58(),HMD_BURN_AMOUNT:'8888',SEAT_COLLECTION_ADDRESS:Keypair.generate().publicKey.toBase58(),MINT_BASE_URI:'https://arweave.net/test',MAX_SEATS_PER_WALLET:'2',GAS_POLICY:'user-pays',CUSTODY_KEYPAIR_PATH:'test-only'});
+  const mintChain={...chain,async tokenInfo(){return{mint:mintConfig.HMD_MINT!,decimals:0};}},payments=new Payments(db,mintChain,engine,mintConfig);
+  const firstKey=randomUUID(),[first,secondMint]=await Promise.all([payments.mintQuote(wallet,firstKey),payments.mintQuote(second,randomUUID())]);
+  expect([4,5]).toContain(first.seatId);expect([4,5]).toContain(secondMint.seatId);expect(first.seatId).not.toBe(secondMint.seatId);
+  expect((await payments.mintQuote(wallet,firstKey)).id).toBe(first.id);
+  await db.mintRequest.deleteMany({where:{id:{in:[first.id,secondMint.id]}}});
+  await db.seat.deleteMany({where:{id:{in:[4,5]}}});
  });
  it('enforces the two-seat limit in the serializable backend reservation layer',async()=>{
   await db.seat.create({data:{id:3,imageHash:'wallet-cap-3'}});
@@ -70,7 +80,7 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   const secondMint=await db.mintRequest.create({data:{wallet,requestKey:randomUUID(),inputHash:'cap-2',seatId:888,amount:'8888',state:'MINTED',expiresAt:new Date(Date.now()+60000)}});
   const mintConfig=config({NODE_ENV:'test',PAYMENT_MODE:'custodial',HMD_MINT:Keypair.generate().publicKey.toBase58(),HMD_BURN_AMOUNT:'8888',SEAT_COLLECTION_ADDRESS:Keypair.generate().publicKey.toBase58(),MINT_BASE_URI:'https://arweave.net/test',MAX_SEATS_PER_WALLET:'2',GAS_POLICY:'user-pays',CUSTODY_KEYPAIR_PATH:'test-only'});
   const mintChain={...chain,async tokenInfo(){return{mint:mintConfig.HMD_MINT!,decimals:0};}};
-  await expect(new Payments(db,mintChain,engine,mintConfig).mintQuote(wallet,randomUUID(),3)).rejects.toThrow('wallet_mint_limit');
+  await expect(new Payments(db,mintChain,engine,mintConfig).mintQuote(wallet,randomUUID())).rejects.toThrow('wallet_mint_limit');
   await db.mintRequest.deleteMany({where:{id:{in:[first.id,secondMint.id]}}});await db.seat.delete({where:{id:3}});
  });
  it('authenticates real ed25519 signatures and rejects replay and CSRF',async()=>{

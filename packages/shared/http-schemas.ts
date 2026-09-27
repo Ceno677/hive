@@ -5,7 +5,7 @@ const uuid=z.string().uuid(),transaction=z.string().max(16000);
 export const requestSchemas:Record<string,z.ZodTypeAny>={
  '/api/auth/challenge':z.object({wallet:keySchema}).strict(),
  '/api/auth/verify':z.object({id:uuid,wallet:keySchema,signature:z.string().max(100)}).strict(),
- '/api/mint/quote':z.object({requestKey:uuid,seatId:z.number().int().min(1).max(888)}).strict(),
+ '/api/mint/quote':z.object({requestKey:uuid}).strict(),
  '/api/mint/prepare':z.object({id:uuid}).strict(),
  '/api/mint/confirm':z.object({id:uuid,transaction}).strict(),
  '/api/requests/quote':z.object({requestKey:uuid,prompt:z.string().min(12).max(8000),public:z.boolean().default(false),mode:z.enum(['BUILD','SOLANA_APP']).default('BUILD'),plan:planSchema.optional(),turnstileToken:z.string().min(1).max(2048).optional()}).strict(),

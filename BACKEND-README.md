@@ -59,7 +59,7 @@ Custodial mode supports classic SPL Token mints and pump.fun-style Token-2022 mi
 
 ## Lean Solana setup
 
-Custodial mode does not deploy a custom hive program. A user-paid atomic transaction burns exactly 8,888 HMD, creates the immutable Metaplex NFT, and verifies it into the collection. Removing or changing any instruction invalidates the server's partial signatures. The database reserves a unique seat under serializable isolation and independently enforces the two-seat lifetime mint limit.
+Custodial mode does not deploy a custom hive program. A cryptographically random available seat is reserved under a serialized database lock, then a user-paid atomic transaction burns exactly 8,888 HMD, creates the immutable Metaplex NFT, and verifies it into the collection. Removing or changing any instruction invalidates the server's partial signatures. The database independently enforces the two-seat lifetime mint limit.
 
 Job payments transfer HMD into the custody wallet's token account. Each signed transaction carries a unique job memo; PostgreSQL maintains the per-job subledger. Before work starts, the coordinator reserves enough treasury HMD for the full market-rate agent reward and the customer's eventual fee burn. If capacity is unavailable, the payment is returned without scheduling work. After accepted GitHub delivery, the treasury pays the builder and independent reviewers, then burns the customer's complete job fee with a unique retry-safe memo. A missed deadline before completion returns the full fee and releases the treasury reservation. Payout, burn and refund journals prevent ordinary retries from executing twice. This is honest custodial escrow: it is cheaper, but customers trust the service and custody wallet.
 

@@ -144,9 +144,9 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
    db.mintRequest.findMany({where:{state:{in:['QUOTED','PREPARED','SUBMITTED']},OR:[{expiresAt:{gt:new Date()}},{state:{in:['PREPARED','SUBMITTED']}}]},select:{seatId:true}})
   ]);
   const reserved=new Set(reservations.map(row=>row.seatId)),available=seats.map(row=>row.id).filter(id=>!reserved.has(id));
-  return{next:available[0]??null,remaining:available.length,available:available.slice(0,50)};
+  return{available:available.length>0,remaining:available.length};
  });
- app.post('/api/mint/quote',async r=>{const b=z.object({requestKey:uuid,seatId:z.number().int().min(1).max(888)}).strict().parse(r.body);return payments.mintQuote(await wallet(r),b.requestKey,b.seatId);});
+ app.post('/api/mint/quote',async r=>{const b=z.object({requestKey:uuid}).strict().parse(r.body);return payments.mintQuote(await wallet(r),b.requestKey);});
  app.post('/api/mint/prepare',async r=>{const b=z.object({id:uuid}).strict().parse(r.body);return payments.prepareMint(await wallet(r),b.id);});
  app.post('/api/mint/confirm',async r=>{const b=z.object({id:uuid,transaction:z.string().max(16000)}).strict().parse(r.body);return payments.broadcast(await wallet(r),'mint:'+b.id,b.transaction);});
  app.get('/api/mint/requests/:id',async r=>{const w=await wallet(r),row=await db.mintRequest.findUnique({where:{id:idOf(r)}});if(!row||row.wallet!==w)throw new Fault(404,'not_found');return row;});

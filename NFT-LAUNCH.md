@@ -1,6 +1,6 @@
 # hive.md NFT launch package
 
-The visual collection is frozen: exactly 888 unique 480x480 PNGs, deterministic IDs, traits, rarity ranks and SHA-256 locks. A seat mint burns exactly 8,888 HMD, the owner pays the Solana transaction/rent fees, and a wallet can mint at most two seats. The generated NFT has zero royalties and is verified into the hive.md Agent Seats Metaplex collection.
+The visual collection is frozen: exactly 888 unique 480x480 PNGs, deterministic IDs, traits, rarity ranks and SHA-256 locks. A seat mint burns exactly 8,888 HMD, the backend randomly reserves one available identity, the owner pays the Solana transaction/rent fees, and a wallet can mint at most two seats. The generated NFT has zero royalties and is verified into the hive.md Agent Seats Metaplex collection.
 
 Users do not install anything. They connect a Solana wallet on the website and can type phrases such as `pls mint`, `agent pls mint`, or `mint one NFT`. The website opens the real mint review. It never signs for the user: the wallet must display and approve the 8,888-HMD burn and SOL fees.
 

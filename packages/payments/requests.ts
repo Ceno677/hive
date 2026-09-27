@@ -1,7 +1,7 @@
 import {Transaction} from '@solana/web3.js';
 import bs58 from 'bs58';
 import type {PrismaClient,Prisma} from '@prisma/client';
-import {randomUUID} from 'node:crypto';
+import {randomInt,randomUUID} from 'node:crypto';
 import type {Config} from '../shared/config.js';
 import {missing,mintKeys,paymentKeys} from '../shared/config.js';
 import {Fault,hash} from '../shared/domain.js';
@@ -111,19 +111,24 @@ export class Payments {
    await this.db.chainOperation.update({where:{id:op.id},data:{state:'FINALIZED'}});
   }
  }
- async mintQuote(wallet:string,key:string,seatId:number){
+ async mintQuote(wallet:string,key:string){
   this.require(mintKeys(this.c));
   if(!this.chain.tokenInfo)throw new Fault(503,'token_information_unavailable');
   if(mintPriceBaseUnits((await this.chain.tokenInfo()).decimals)!==this.c.HMD_BURN_AMOUNT)throw new Fault(503,'mint_price_mismatch','Mint price must equal 8,888 HMD');
   return serial(async tx=>{
-   const inputHash=hash({seatId}),old=await tx.mintRequest.findUnique({where:{wallet_requestKey:{wallet,requestKey:key}}});
+   // Serialize the draw so two simultaneous requests cannot reserve the same seat.
+   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hive-random-mint'))`;
+   const inputHash=hash({mode:'random-v1'}),old=await tx.mintRequest.findUnique({where:{wallet_requestKey:{wallet,requestKey:key}}});
    if(old){if(old.inputHash!==inputHash)throw new Fault(409,'request_key_conflict');return old;}
    const claimed=await tx.mintRequest.count({where:{wallet,OR:[{state:'MINTED'},{state:{in:['QUOTED','PREPARED','SUBMITTED']},OR:[{expiresAt:{gt:new Date()}},{state:{in:['PREPARED','SUBMITTED']}}]}]}});
    if(claimed>=Number(this.c.MAX_SEATS_PER_WALLET))throw new Fault(409,'wallet_mint_limit');
-   const seat=await tx.seat.findUnique({where:{id:seatId}});
-   if(!seat||seat.mint)throw new Fault(409,'seat_unavailable');
-   const reservations=await tx.mintRequest.count({where:{seatId,state:{in:['QUOTED','PREPARED','SUBMITTED']},OR:[{expiresAt:{gt:new Date()}},{state:{in:['PREPARED','SUBMITTED']}}]}});
-   if(reservations)throw new Fault(409,'seat_reserved');
+   const [seats,reservations]=await Promise.all([
+    tx.seat.findMany({where:{mint:null},select:{id:true}}),
+    tx.mintRequest.findMany({where:{state:{in:['QUOTED','PREPARED','SUBMITTED']},OR:[{expiresAt:{gt:new Date()}},{state:{in:['PREPARED','SUBMITTED']}}]},select:{seatId:true}})
+   ]);
+   const reserved=new Set(reservations.map(row=>row.seatId)),available=seats.map(row=>row.id).filter(id=>!reserved.has(id));
+   if(!available.length)throw new Fault(409,'seat_unavailable');
+   const seatId=available[randomInt(available.length)];
    return tx.mintRequest.create({data:{wallet,requestKey:key,inputHash,seatId,amount:this.c.HMD_BURN_AMOUNT!,expiresAt:new Date(Date.now()+600000)}});
   },this.db);
  }
