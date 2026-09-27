@@ -81,26 +81,24 @@ async function showSeats(){
 async function mint(){
  show('NFT SEAT','Take your seat.');
  const config=await api('/mint/config');
- content.append(element('p','Burn 8,888 $HMD to mint one of the 888 approved identities. Review the exact amount and network fee in your wallet before approving.'));
+ content.append(element('p','Burn 8,888 $HMD to mint one random identity. One click opens the wallet confirmation; after signing, the NFT is issued in the same transaction.'));
  if(!config.enabled){status('Seat minting is not open yet.');return;}
  const availability=await api('/mint/availability');
  if(!availability.available){status('All 888 NFT seats are minted or currently reserved.');return;}
  content.append(element('p',availability.remaining+' RANDOM NFT SEATS AVAILABLE'));
  content.append(element('p','Your NFT identity is selected randomly from the remaining collection when you request the mint.'));
  await ensure();
- action('REVIEW MINT ↗',async()=>{
+ action('MINT RANDOM NFT ↗',async()=>{
+  status('Selecting and reserving your random NFT…');
   const quote=await api('/mint/quote',{requestKey:crypto.randomUUID()});
-  show('MINT REVIEW','Random seat #'+String(quote.seatId).padStart(3,'0'));
-  const token=await api('/token');content.append(element('p','BURN '+amount(quote.amount,token.decimals)+' $HMD / '+config.cluster.toUpperCase()));
-  content.append(element('p','Your wallet will show the $HMD burn amount and SOL network fee. Your NFT is issued in the same transaction.'));
-  action('APPROVE IN WALLET ↗',async()=>{
-   const prepared=await api('/mint/prepare',{id:quote.id}),transaction=await sign(prepared);
-   const submitted=await api('/mint/confirm',{id:quote.id,transaction});
-   status('Transaction submitted: '+submitted.signature);
-   action('CHECK CONFIRMATION',async()=>{
-    const result=await api('/mint/requests/'+quote.id);status(result.state==='MINTED'?'Your NFT seat is minted.':'Confirmation pending. You can safely close this dialog.');
-   },true);
-  });
+  const prepared=await api('/mint/prepare',{id:quote.id}),transaction=await sign(prepared);
+  const submitted=await api('/mint/confirm',{id:quote.id,transaction});
+  show('MINT SUBMITTED','Random seat #'+String(quote.seatId).padStart(3,'0'));
+  content.append(element('p','Your random NFT is confirming on '+config.cluster.toUpperCase()+'.'));
+  status('Transaction submitted: '+submitted.signature);
+  action('CHECK CONFIRMATION',async()=>{
+   const result=await api('/mint/requests/'+quote.id);status(result.state==='MINTED'?'Your random NFT is now in your wallet.':'Confirmation pending. You can safely close this dialog.');
+  },true);
  });
 }
 function isMintIntent(value:string){
