@@ -1,5 +1,7 @@
 # hive.md backend
 
+For the customer-facing product flow, see [USER-GUIDE.md](./USER-GUIDE.md).
+
 NFT collection preparation and the post-token binding procedure are documented in [NFT-LAUNCH.md](./NFT-LAUNCH.md).
 
 Customers work in the existing website. They connect a wallet that holds at least one hive.md NFT, describe a project, approve a separate HMD job quote and receive the result; they never install Docker or run a daemon. Live collection ownership is checked before quoting and again before payment. NFT holders can separately opt in as network operators by pairing a seat with their own machine and agent. Project-operated agents provide baseline capacity.
