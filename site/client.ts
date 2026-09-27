@@ -1,12 +1,14 @@
 import {Buffer} from 'buffer';
 import {Transaction} from '@solana/web3.js';
 import bs58 from 'bs58';
+import {getWallets} from '@wallet-standard/app';
 (globalThis as any).Buffer=Buffer;
 const win=window as any;
 win.HIVE_DASHBOARD_CONFIG={snapshotUrl:'/api/network/snapshot',...win.HIVE_DASHBOARD_CONFIG};
 const dialog=document.querySelector<HTMLDialogElement>('#dialog')!;
 const content=document.querySelector<HTMLDivElement>('#dialog-content')!;
-let csrf=sessionStorage.getItem('hive-csrf')??'',wallet='',stream:EventSource|undefined,capabilitiesPromise:Promise<any>|undefined,turnstileLoad:Promise<void>|undefined;
+const walletRegistry=getWallets();
+let csrf=sessionStorage.getItem('hive-csrf')??'',wallet='',selectedWalletName=sessionStorage.getItem('hive-wallet')??'',selectedStandardWallet:any,stream:EventSource|undefined,capabilitiesPromise:Promise<any>|undefined,turnstileLoad:Promise<void>|undefined;
 function element<K extends keyof HTMLElementTagNameMap>(tag:K,text='',cls=''){const e=document.createElement(tag);e.textContent=text;if(cls)e.className=cls;return e;}
 function show(kicker:string,title:string){
  stream?.close();document.querySelector('#dialog-kicker')!.textContent='hive.md / '+kicker;
@@ -42,16 +44,53 @@ async function humanToken(){
   win.turnstile.execute(widget);
  });
 }
-function provider(){const p=win.phantom?.solana??win.solflare??win.solana;if(!p?.connect||!p?.signMessage)throw Error('Open this page in a Solana wallet browser, or enable your Solana wallet extension.');return p;}
+function compatibleWallets(){
+ const found=new Map<string,{name:string;standard?:any;legacy?:any}>(),seen=new Set<any>();
+ for(const standard of walletRegistry.get().filter((wallet:any)=>wallet.features?.['standard:connect']&&wallet.features?.['solana:signMessage']&&wallet.features?.['solana:signTransaction']))found.set(standard.name,{name:standard.name,standard});
+ const candidates:[string,any][]=[['Phantom',win.phantom?.solana],['Solflare',win.solflare],['Backpack',win.backpack?.solana??win.backpack]];
+ if(win.solana)candidates.push([win.solana.isPhantom?'Phantom':win.solana.isSolflare?'Solflare':win.solana.isBackpack?'Backpack':'Solana Wallet',win.solana]);
+ for(const [name,legacy] of candidates)if(legacy?.connect&&legacy?.signMessage&&legacy?.signTransaction&&!seen.has(legacy)){seen.add(legacy);if(!found.has(name))found.set(name,{name,legacy});}
+ return[...found.values()].sort((a,b)=>a.name.localeCompare(b.name));
+}
+function standardProvider(detected:{name:string;standard?:any;legacy?:any}){
+ if(detected.legacy)return detected.legacy;
+ const walletStandard=detected.standard;
+ let account:any;
+ const current=()=>account??walletStandard.accounts?.find((value:any)=>value.features?.includes('solana:signMessage')&&value.features?.includes('solana:signTransaction'));
+ return{
+  async connect(){await walletStandard.features['standard:connect'].connect();account=current();if(!account)throw Error(walletStandard.name+' does not expose a compatible Solana account.');},
+  get publicKey(){const value=current();if(!value)throw Error('Connect '+walletStandard.name+' first.');return{toBase58:()=>value.address};},
+  async signMessage(message:Uint8Array){const value=current(),result=await walletStandard.features['solana:signMessage'].signMessage({account:value,message});return result[0];},
+  async signTransaction(transaction:Transaction){
+   const value=current(),chain=value.chains?.includes('solana:mainnet')?'solana:mainnet':value.chains?.find((item:string)=>item.startsWith('solana:'));
+   const result=await walletStandard.features['solana:signTransaction'].signTransaction({account:value,transaction:transaction.serialize({requireAllSignatures:false,verifySignatures:false}),...(chain?{chain}:{})});
+   return Transaction.from(result[0].signedTransaction);
+  }
+ };
+}
+function provider(){
+ selectedStandardWallet=selectedStandardWallet??compatibleWallets().find(value=>value.name===selectedWalletName);
+ if(selectedStandardWallet)return standardProvider(selectedStandardWallet);
+ throw Error('Choose one of your detected Solana wallets first.');
+}
+async function chooseWallet(){
+ show('WALLET','Choose your Solana wallet.');
+ const wallets=compatibleWallets();
+ if(!wallets.length){status('No compatible Solana wallet was detected. Enable Phantom, Solflare, Backpack, or another Wallet Standard wallet and reload.');throw Error('No compatible Solana wallet detected.');}
+ content.append(element('p','Detected wallets on this device:'));
+ return new Promise<void>(resolve=>{
+  for(const detected of wallets)action('CONNECT '+detected.name.toUpperCase()+' ↗',async()=>{selectedWalletName=detected.name;selectedStandardWallet=detected;sessionStorage.setItem('hive-wallet',selectedWalletName);await connect();resolve();},true);
+ });
+}
 async function connect(){
  const p=provider();await p.connect();wallet=p.publicKey.toBase58();
  const challenge=await api('/auth/challenge',{wallet});
- const result=await p.signMessage(new TextEncoder().encode(challenge.message),'utf8');
+ const result=await p.signMessage(new TextEncoder().encode(challenge.message));
  const auth=await api('/auth/verify',{id:challenge.id,wallet,signature:bs58.encode(result.signature??result)});
  csrf=auth.csrf;sessionStorage.setItem('hive-csrf',csrf);
  document.querySelector('#wallet')!.textContent=wallet.slice(0,4)+'…'+wallet.slice(-4)+' ↗';
 }
-async function ensure(){if(!wallet||!csrf)await connect();}
+async function ensure(){if(!wallet||!csrf||!selectedWalletName){if(!selectedWalletName)await chooseWallet();else await connect();}}
 async function sign(prepared:{transaction:string}){
  const p=provider(),tx=Transaction.from(Buffer.from(prepared.transaction,'base64'));
  status('Review and approve the transaction in your wallet.');
@@ -59,8 +98,7 @@ async function sign(prepared:{transaction:string}){
  return Buffer.from(signed.serialize()).toString('base64');
 }
 async function account(){
- show('WALLET','Your place in the hive.');
- await ensure();content.append(element('p',wallet));
+ await ensure();show('WALLET','Your place in the hive.');content.append(element('p',wallet));
  action('MY BUILDS ↗',async()=>{
   show('YOUR BUILDS','Your projects.');
   const list=await api('/workflows');
@@ -68,7 +106,7 @@ async function account(){
   for(const f of list)action(f.title+' / '+f.status,()=>viewFlow(f.id),true);
  });
  action('MY NFT SEATS',showSeats,true);
- action('DISCONNECT',async()=>{await api('/auth/logout',{});wallet='';csrf='';sessionStorage.removeItem('hive-csrf');document.querySelector('#wallet')!.textContent='CONNECT WALLET ↗';dialog.close();},true);
+ action('DISCONNECT',async()=>{await api('/auth/logout',{});wallet='';csrf='';selectedWalletName='';selectedStandardWallet=undefined;sessionStorage.removeItem('hive-csrf');sessionStorage.removeItem('hive-wallet');document.querySelector('#wallet')!.textContent='CONNECT WALLET ↗';dialog.close();},true);
 }
 async function showSeats(){
  show('YOUR SEATS','NFT access to hosted agents.');
@@ -79,6 +117,7 @@ async function showSeats(){
  action('BACK TO WALLET',account,true);
 }
 async function mint(){
+ await ensure();
  show('NFT SEAT','Take your seat.');
  const config=await api('/mint/config');
  content.append(element('p','Burn 8,888 $HMD to mint one random identity. One click opens the wallet confirmation; after signing, the NFT is issued in the same transaction.'));
@@ -87,7 +126,6 @@ async function mint(){
  if(!availability.available){status('All 888 NFT seats are minted or currently reserved.');return;}
  content.append(element('p',availability.remaining+' RANDOM NFT SEATS AVAILABLE'));
  content.append(element('p','Your NFT identity is selected randomly from the remaining collection when you request the mint.'));
- await ensure();
  action('MINT RANDOM NFT ↗',async()=>{
   status('Selecting and reserving your random NFT…');
   const quote=await api('/mint/quote',{requestKey:crypto.randomUUID()});

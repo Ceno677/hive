@@ -93,8 +93,7 @@ export function config(env: NodeJS.ProcessEnv = process.env): Config {
       c.TRUST_PROXY!=='true'&&'TRUST_PROXY=true',
       c.ARTIFACT_STORAGE!=='s3'&&'ARTIFACT_STORAGE=s3',
       c.S3_SECRET_KEY.includes('change_me')&&'private S3 credentials',
-      !c.OPERATIONS_TOKEN&&'OPERATIONS_TOKEN',
-      (!c.TURNSTILE_SITE_KEY||!c.TURNSTILE_SECRET_KEY)&&'Turnstile keys'
+      !c.OPERATIONS_TOKEN&&'OPERATIONS_TOKEN'
     ].filter(Boolean);
     if(invalid.length)throw new Error('Production requires: '+invalid.join(', '));
   }

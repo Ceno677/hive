@@ -21,7 +21,7 @@ const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors:str
 page.on('pageerror',e=>errors.push(e.message));
 const wallet=Keypair.generate();
 await page.exposeFunction('hiveTestSign',(bytes:number[])=>Array.from(nacl.sign.detached(Uint8Array.from(bytes),wallet.secretKey)));
-await page.addInitScript({content:'window.solana={publicKey:{toBase58:()=>'+JSON.stringify(wallet.publicKey.toBase58())+'},async connect(){},async signMessage(bytes){return {signature:Uint8Array.from(await window.hiveTestSign(Array.from(bytes)))}}};'});
+await page.addInitScript({content:'window.solana={publicKey:{toBase58:()=>'+JSON.stringify(wallet.publicKey.toBase58())+'},async connect(){},async signMessage(bytes){return {signature:Uint8Array.from(await window.hiveTestSign(Array.from(bytes)))}},async signTransaction(transaction){return transaction}};'});
 await page.route('**/api/**',async route=>{
  const path=new URL(route.request().url()).pathname;
  const json=(status:number,body:unknown)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
@@ -37,6 +37,7 @@ await page.route('**/api/**',async route=>{
 try{
  await page.goto(base+'/',{waitUntil:'networkidle'});
  await page.locator('#wallet').click();
+ await page.getByRole('button',{name:'CONNECT SOLANA WALLET'}).click();
  try{await page.getByRole('button',{name:'MY BUILDS'}).waitFor({timeout:10000});}
  catch(e){console.error({errors,dialog:await page.locator('#dialog').innerText()});throw e;}
  await page.locator('#close-dialog').click();

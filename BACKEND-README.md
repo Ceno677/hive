@@ -48,7 +48,7 @@ Use `PAYMENT_MODE=custodial` and supply real launch values in .env:
 - EXECUTION_ENABLED=true after building/testing the execution image.
 - If the scheduler is hosted without Docker, set EXECUTION_URL and EXECUTION_TOKEN for the dedicated runner described in RUNNER-DEPLOY.md.
 - Enable periodic holder distributions with HOLDER_DISTRIBUTIONS_ENABLED=true only after the DAS ownership snapshot and real payout smoke tests pass. The default interval is 72 hours.
-- SOLANA_BACKUP_RPC_URL, Turnstile keys, private S3 storage, TRUST_PROXY=true and OPERATIONS_TOKEN are required by production validation.
+- SOLANA_BACKUP_RPC_URL, private S3 storage, TRUST_PROXY=true and OPERATIONS_TOKEN are required by production validation. Turnstile remains optional because build quotes already require a wallet-signed session, official NFT ownership and strict rate limiting.
 - GAS_POLICY=user-pays and SETTLEMENT_POLICY=final-release only if the owner approves those policies.
 
 Prices are positive integer token base units, never decimal floats. Mint decimals come from the actual token mint. In custodial mode, reward basis points must allocate 100% of the market-rate reward across the builder and required reviewers. Set JOB_DEADLINE_HOURS from 1 to 168; the deadline is shown with the quote and cryptographically bound to the funding memo. Rewards vest only after verified GitHub delivery. The scheduler automatically returns the full customer fee after an expired job. Alternative partial-work compensation policies need additional implementation, not just different marketing copy.

@@ -66,6 +66,7 @@
     "@octokit/auth-app": "^8.3.1",
     "@prisma/client": "^6.19.3",
     "@solana/web3.js": "^1.99.0",
+    "@wallet-standard/app": "^1.1.0",
     "bs58": "^6.0.0",
     "buffer": "^6.0.3",
     "bullmq": "^5.81.5",
