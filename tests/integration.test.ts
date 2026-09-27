@@ -75,7 +75,11 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
  });
  it('authenticates real ed25519 signatures and rejects replay and CSRF',async()=>{
   const ch=await server.app.inject({method:'POST',url:'/api/auth/challenge',payload:{wallet}});
-  const body=ch.json(),signature=bs58.encode(nacl.sign.detached(Buffer.from(body.message),actor.secretKey));
+  const body=ch.json();
+  expect(body.message).toContain('\nChain ID: devnet\n');
+  expect(body.message).not.toContain('\nChain:');
+  expect(body.message.match(/\nNonce: ([A-Za-z0-9]+)\n/)?.[1]).toHaveLength(32);
+  const signature=bs58.encode(nacl.sign.detached(Buffer.from(body.message),actor.secretKey));
   const auth=await server.app.inject({method:'POST',url:'/api/auth/verify',payload:{id:body.id,wallet,signature}});
   expect(auth.statusCode).toBe(200);
   const replay=await server.app.inject({method:'POST',url:'/api/auth/verify',payload:{id:body.id,wallet,signature}});

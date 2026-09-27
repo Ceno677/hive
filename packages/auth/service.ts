@@ -5,12 +5,14 @@ import type {PrismaClient} from '@prisma/client';
 import {serial} from '../database/client.js';
 import {Fault,secret,digest} from '../shared/domain.js';
 import type {Config} from '../shared/config.js';
+import {randomBytes} from 'node:crypto';
 export class Auth {
  constructor(private db:PrismaClient,private c:Config){}
  async challenge(wallet:string){
   new PublicKey(wallet);
-  const nonce=secret(),expiresAt=new Date(Date.now()+300000);
-  const message=[new URL(this.c.PUBLIC_ORIGIN).host+' wants you to sign in with your Solana account:',wallet,'','Sign in to hive.md. This does not authorize transactions.','','URI: '+this.c.PUBLIC_ORIGIN,'Version: 1','Chain: '+this.c.SOLANA_CLUSTER,'Nonce: '+nonce,'Issued At: '+new Date().toISOString(),'Expiration Time: '+expiresAt.toISOString()].join('\n');
+  const nonce=randomBytes(16).toString('hex'),expiresAt=new Date(Date.now()+300000);
+  const chainId=this.c.SOLANA_CLUSTER==='mainnet-beta'?'mainnet':this.c.SOLANA_CLUSTER;
+  const message=[new URL(this.c.PUBLIC_ORIGIN).host+' wants you to sign in with your Solana account:',wallet,'','Sign in to hive.md. This does not authorize transactions.','','URI: '+this.c.PUBLIC_ORIGIN,'Version: 1','Chain ID: '+chainId,'Nonce: '+nonce,'Issued At: '+new Date().toISOString(),'Expiration Time: '+expiresAt.toISOString()].join('\n');
   const row=await this.db.authChallenge.create({data:{wallet,message,expiresAt}});
   return{id:row.id,message,expiresAt};
  }
