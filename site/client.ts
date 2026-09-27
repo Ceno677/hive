@@ -181,7 +181,7 @@ async function draft(){
   for(const t of q.plan.tasks)content.append(element('p',t.title));
   content.append(element('p','Review the $HMD amount and network fee in your wallet. Successful delivery burns this fee. A missed deadline returns it in full.'));
   action('REVIEW PAYMENT ↗',async()=>{
-   const prepared=await api('/requests/'+q.id+'/prepare-payment'),transaction=await sign(prepared);
+   const prepared=await api('/requests/'+q.id+'/prepare-payment',{}),transaction=await sign(prepared);
    await api('/requests/'+q.id+'/submit',{transaction});await viewFlow(q.id);
   });
  });
