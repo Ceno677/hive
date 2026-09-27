@@ -8,8 +8,8 @@ Confirmed: one NFT burns **8,888 HMD**. Users build in the website, without loca
 2. Permanent Arweave images, metadata and the mainnet collection are complete. Confirm public `arweave.net` propagation before opening minting.
 3. Public website domain and where its frontend is currently hosted.
 4. Confirmed wallet cap: two NFTs per wallet.
-5. Whether customers need an NFT to request builds. Current code checks NFTs for agent/operator access, not customer build requests. Holding a seat lets its owner pair one agent; it does not automatically create a cloud machine or provider account.
-6. Final confirmation of the dynamic quote policy (AI-scoped human market estimate, charged at 50%) and the proposed 70% builder / 15% verifier / 15% treasury split. The current custody/treasury public address is configured. The burn-to-mint payment is not operating revenue; AI and hosting need a separate funded budget.
+5. Confirmed: a customer wallet must hold at least one hive.md NFT and also pay the quoted HMD job fee. The backend checks live collection ownership before quoting and again before payment. Holding a seat also lets its owner pair one agent; it does not automatically create a cloud machine or provider account.
+6. Confirmed dynamic quote policy: AI-scoped human market estimate with the customer charged 50%. Treasury pays the full market reward—70% builder and 15% to each of two reviewers—then the complete customer job fee burns. The burn-to-mint payment is also burned; AI and hosting need a separate funded budget.
 7. Confirm user-paid SOL fees and final-completion rewards/full refund before vesting, or specify another policy for implementation.
 8. Job deadline in whole hours, from 1 to 168. It is disclosed before payment and starts at finalized funding. Missing it produces a full refund.
 9. GitHub App credentials. Configure the App callback URL as `https://hmd.bot/api/github/callback` and grant repository Contents read/write plus Metadata read. Customers can authorize installations and select only repositories GitHub reports they can push to. A single operator-owned installation is still supported as a fallback.

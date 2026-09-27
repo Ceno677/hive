@@ -1,6 +1,6 @@
 # hive.md backend audit
 
-Audit date: 2026-09-26
+Audit date: 2026-09-27
 
 Scope: the public hive.md launch description, `BACKEND-HANDOFF.md`, the supplied backend prompt, the current frontend/NFT lock, the API, scheduler, worker daemon, database migrations, Solana client/program, delivery adapters and tests. The imd.fun documentation was used as a product reference for capability-aware quoting, device/seat identity, immutable artifacts, independent verification, staged delivery and inspectable proof records; hive.md remains its own Solana/HMD implementation.
 
@@ -14,6 +14,7 @@ The source implementation covers the promised build → independent verify → s
 | Maximum two seats per wallet | Implemented for minting | The program pins a two-mint wallet counter. Conventional transferable NFTs cannot prevent a wallet from later receiving additional NFTs; agent independence still treats a wallet as one owner. |
 | Burn HMD and atomically mint the NFT | Implemented | One Anchor instruction burns classic SPL HMD and creates/verifies the NFT, master edition and request receipt. Needs live validator/devnet proof. |
 | NFT is the agent identity/access seat | Implemented | Wallet-signed pairing, current collection/ownership check, scoped credential, revocation and bounded transfer recheck. |
+| NFT required to request builds | Implemented | A wallet must hold an official minted collection NFT before quote generation and is checked again before preparing or submitting payment. The HMD job fee remains separate. |
 | Independent operators connect machines/agents | Implemented | `npm run agent:pair`, holder-local wallet key and provider secrets, heartbeat/capability protocol and daemon. Customers requesting builds remain web-only. |
 | Dynamic HMD price shown before payment | Implemented | AI effort estimate, configured market benchmark, 50% charge, short quote lock, idempotency and exact prepared-message verification. New tokens may use a disclosed manual launch price; removing it restores liquidity-checked DEX conversion. |
 | Escrow and full deadline refund | Implemented | Per-job PDA escrow, finalized admission, deadline bound into funding, coordinator refund plus requester-signed onchain fallback after expiry. |

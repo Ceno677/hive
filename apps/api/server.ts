@@ -25,9 +25,10 @@ import {requestSchemas} from '../../packages/shared/http-schemas.js';
 import {deploymentAddress} from '../../packages/delivery/solana-deploy.js';
 import {exchangeGitHubConnection,githubInstallationUrl} from '../../packages/delivery/github.js';
 import {createJobPricing} from '../../packages/pricing/quote.js';
+import {DasHolderSnapshot,type HolderSnapshotSource} from '../../packages/payments/holders.js';
 const uuid=z.string().uuid(),idOf=(r:FastifyRequest)=>uuid.parse((r.params as any).id);
-export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:ArtifactStore;model:Model;pricingModel?:Model;serveStatic?:boolean;logger?:boolean}){
- const {db,c,chain,store,model}=opts,pricingModel=opts.pricingModel??model,auth=new Auth(db,c),engine=new Engine(db,chain,store,c),payments=new Payments(db,chain,engine,c);
+export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:ArtifactStore;model:Model;pricingModel?:Model;holderSource?:HolderSnapshotSource;serveStatic?:boolean;logger?:boolean}){
+ const {db,c,chain,store,model}=opts,pricingModel=opts.pricingModel??model,auth=new Auth(db,c),engine=new Engine(db,chain,store,c),payments=new Payments(db,chain,engine,c),holderSource=opts.holderSource??new DasHolderSnapshot(c.HOLDER_SNAPSHOT_RPC_URL??c.SOLANA_RPC_URL);
  const paymentRequired=paymentKeys(c),mintRequired=mintKeys(c),deliveryRequired=deliveryKeys(c);
  const app=Fastify({logger:opts.logger===false?false:{redact:['req.headers.authorization','req.headers.cookie','req.body','res.headers.set-cookie']},bodyLimit:2_100_000,trustProxy:c.TRUST_PROXY==='true'});
  app.register(cookie);
@@ -56,6 +57,25 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   const token=r.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
   if(!token)throw new Fault(401,'device_required');return auth.device(token);
  }
+ async function requireCustomerSeat(owner:string){
+  if(!c.SEAT_COLLECTION_ADDRESS)throw new Fault(503,'collection_not_configured');
+  const [cached,minted]=await Promise.all([
+   db.seat.findMany({where:{ownerWallet:owner,mint:{not:null}},select:{mint:true}}),
+   db.mintRequest.findMany({where:{wallet:owner,state:'MINTED',mint:{not:null}},select:{mint:true}})
+  ]);
+  const candidates=[...new Set([...cached,...minted].map(row=>row.mint).filter((mint):mint is string=>Boolean(mint)))];
+  for(const mint of candidates){
+   try{const owned=await chain.ownership(owner,mint);await db.seat.updateMany({where:{mint},data:{ownerWallet:owner,checkedAt:new Date(),slot:BigInt(owned.slot)}});return mint;}
+   catch(error){if(!(error instanceof Fault)||error.status>=500)break;await db.seat.updateMany({where:{mint,ownerWallet:owner},data:{ownerWallet:null,checkedAt:null}});}
+  }
+  const snapshot=await holderSource.snapshot(c.SEAT_COLLECTION_ADDRESS);
+  const reported=snapshot.assets.filter(asset=>asset.wallet===owner).map(asset=>asset.assetId);
+  if(reported.length){
+   const official=await db.seat.findMany({where:{mint:{in:reported}},select:{mint:true}}),mints=official.map(row=>row.mint).filter((mint):mint is string=>Boolean(mint));
+   if(mints.length){await db.seat.updateMany({where:{mint:{in:mints}},data:{ownerWallet:owner,checkedAt:new Date(),slot:snapshot.slot}});return mints[0];}
+  }
+  throw new Fault(403,'nft_required','Hold at least one hive.md NFT in this wallet to request a build');
+ }
  async function ownFlow(r:FastifyRequest,id=idOf(r)){
   const owner=await wallet(r),f=await db.workflow.findUnique({where:{id}});
   if(!f||f.wallet!==owner)throw new Fault(404,'not_found');return f;
@@ -71,7 +91,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   const {instructions,policy,...safe}=task;
   return{...safe,attempts:(safe.attempts??[]).map((attempt:any)=>({...attempt,verification:attempt.verification?{...attempt.verification,checks:Array.isArray(attempt.verification.checks)?attempt.verification.checks.map((check:any)=>({name:String(check?.name??'check'),passed:Boolean(check?.passed)})):[]}:null}))};
  };
- const jobMissing=[...missing(c,[...paymentRequired,...deliveryRequired,'AI_API_KEY']),...missingModels(c)];
+ const jobMissing=[...missing(c,[...paymentRequired,...deliveryRequired,'AI_API_KEY','SEAT_COLLECTION_ADDRESS']),...missingModels(c)];
  async function verifyHuman(token:string|undefined,ip:string){
   if(!c.TURNSTILE_SECRET_KEY)return;
   if(!token)throw new Fault(400,'human_verification_required');
@@ -93,7 +113,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   mint:{enabled:!missing(c,mintRequired).length,missing:missing(c,mintRequired)},
   jobs:{enabled:!jobMissing.length&&c.EXECUTION_ENABLED==='true',missing:jobMissing,execution:c.EXECUTION_ENABLED==='true'},
   pricing:{model:'AI_MARKET_RESEARCH',marketPercentageBps:c.JOB_PRICE_MARKET_BPS,quoteTtlSeconds:c.JOB_QUOTE_TTL_SECONDS,source:c.HMD_MANUAL_PRICE_USD?'manual':c.DEVNET_TEST_HMD_PRICE_USD?'devnet-test':'dexscreener',minimumLiquidityUsd:c.HMD_MANUAL_PRICE_USD?0:c.HMD_PRICE_MIN_LIQUIDITY_USD,maxQuoteLiquidityBps:c.HMD_MANUAL_PRICE_USD?null:c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS},
-  economics:{customerFee:'BURN_ON_SUCCESS',failedJob:'FULL_REFUND',agentRewards:'TREASURY_MARKET_PRICE',builderBps:Number(c.BUILDER_BPS??0),reviewerBpsEach:Number(c.VERIFIER_BPS??0)},
+  access:{customerNftRequired:true,minimumSeats:1},economics:{customerFee:'BURN_ON_SUCCESS',failedJob:'FULL_REFUND',agentRewards:'TREASURY_MARKET_PRICE',builderBps:Number(c.BUILDER_BPS??0),reviewerBpsEach:Number(c.VERIFIER_BPS??0)},
   skills:Object.keys(skills).filter(s=>s!=='rust'||!!c.RUST_SANDBOX_IMAGE),tokenMint:c.HMD_MINT??null,quality:{reviewQuorum:c.REVIEW_QUORUM,repairPasses:c.AGENT_REPAIR_PASSES},
   delivery:{site:c.NETLIFY_SITE_ID??null,githubOwner:c.GITHUB_ALLOWED_OWNER??null,githubConnect:Boolean(c.GITHUB_CLIENT_ID&&c.GITHUB_CLIENT_SECRET),programConfigured:c.SOLANA_RELEASES_ENABLED==='true'&&Boolean(c.DEPLOY_PROGRAM_SEED&&c.SOLANA_BUILD_IMAGE)},
   holderDistributions:{enabled:c.HOLDER_DISTRIBUTIONS_ENABLED==='true',intervalHours:c.HOLDER_DISTRIBUTION_INTERVAL_HOURS},
@@ -132,6 +152,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
  app.get('/api/mint/requests/:id',async r=>{const w=await wallet(r),row=await db.mintRequest.findUnique({where:{id:idOf(r)}});if(!row||row.wallet!==w)throw new Fault(404,'not_found');return row;});
  app.post('/api/requests/quote',{config:{rateLimit:{max:3,timeWindow:'1 minute'}}},async r=>{
   const w=await wallet(r);
+  await requireCustomerSeat(w);
   payments.require(paymentRequired);
   const unavailable=[...missing(c,deliveryRequired),...missingModels(c)];
   if(!c.AI_API_KEY||unavailable.length)throw new Fault(503,'integration_not_configured','Required build or delivery settings are missing',{fields:[...(!c.AI_API_KEY?['AI_API_KEY']:[]),...unavailable]});
@@ -155,8 +176,8 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   const pricing=await createJobPricing({c,model:pricingModel,prompt:b.prompt,plan:planned,mode:b.mode,mint:token.mint,decimals:token.decimals});
   return engine.create(w,b.requestKey,b.prompt,planned,b.public,pricing.amountBaseUnits,Number(c.BUILDER_BPS),Number(c.VERIFIER_BPS)*c.REVIEW_QUORUM,c.TREASURY_WALLET!,c.JOB_DEADLINE_HOURS!,b.mode,deploymentTarget,pricing);
  });
- app.post('/api/requests/:id/prepare-payment',async r=>payments.prepare(await wallet(r),idOf(r)));
- app.post('/api/requests/:id/submit',async r=>{const b=z.object({transaction:z.string().max(16000)}).strict().parse(r.body);return payments.broadcast(await wallet(r),'fund:'+idOf(r),b.transaction);});
+ app.post('/api/requests/:id/prepare-payment',async r=>{const w=await wallet(r);await requireCustomerSeat(w);return payments.prepare(w,idOf(r));});
+ app.post('/api/requests/:id/submit',async r=>{const w=await wallet(r);await requireCustomerSeat(w);const b=z.object({transaction:z.string().max(16000)}).strict().parse(r.body);return payments.broadcast(w,'fund:'+idOf(r),b.transaction);});
  app.post('/api/workflows/:id/prepare-expired-refund',async r=>payments.prepareExpiredRefund(await wallet(r),idOf(r)));
  app.post('/api/workflows/:id/submit-expired-refund',async r=>{const b=z.object({transaction:z.string().max(16000)}).strict().parse(r.body);return payments.broadcast(await wallet(r),'refund-expired:'+idOf(r),b.transaction);});
  app.get('/api/requests/:id',async r=>ownFlow(r));

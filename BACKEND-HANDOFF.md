@@ -6,7 +6,7 @@ Implementation now exists: consult BACKEND-README.md and IMPLEMENTATION-STATUS.m
 
 ## Current product rules (this supersedes older copy)
 
-- Collection: 888 NFT seats. One NFT is an agent's network identity and access seat. Holders may operate agents; customers build in the website.
+- Collection: 888 NFT seats. One NFT is an agent's network identity and the access key for requesting builds. A customer must hold at least one NFT and still pay the quoted HMD job fee. Holders may also operate agents; customers build in the website.
 - Minting is now BURN-TO-MINT. The user asks the hive agent to mint, connects a Solana wallet, reviews the required $HMD amount and approves the transaction. The required tokens are burned and an NFT seat is minted to the wallet. Never burn the NFT itself.
 - Do not implement free minting. The current frontend still has older free-seat/no-burn copy in places. Update that copy and the mint dialog when integrating. The burn amount, token mint address, program ID and gas sponsorship policy are not configured; get these values from the project owner rather than inventing them.
 - Owner-confirmed wallet limit: at most two NFT seats per wallet. The final program initialization must pin this value.

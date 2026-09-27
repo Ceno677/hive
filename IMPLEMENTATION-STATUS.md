@@ -6,6 +6,7 @@ This repository contains the backend and web integration, with the API and sched
 
 - Fastify API; PostgreSQL/Prisma migrations; wallet-signed authentication with one-time challenges, secure session cookie settings and CSRF.
 - NFT-holder/project-agent pairing, capabilities, heartbeats, bounded ownership rechecks, transfer revocation, scoped credentials, transactionally bounded concurrency and fenced leases. NFT ownership is capped at two per wallet by the owner-approved default.
+- Customer NFT access gating using live collection ownership before job quoting and again before payment preparation/submission; the HMD job fee is separate.
 - DAG validation, funded-job admission, immutable artifacts, distinct builder plus two-reviewer quorum, trusted deterministic checks for every review, AI acceptance review, retries and final validation.
 - Private workflows/artifacts, authorized SSE, a public opt-in snapshot plus sanitized workflow/task/event/worker/artifact proof APIs, and ZIP downloads.
 - Exact prepared-message wallet transaction checks; journals; finalized escrow/mint reconciliation; deadline-bound escrow, requester-signed expired refund, integer reward allocation and idempotent payout/refund/registry PDAs.
@@ -24,7 +25,7 @@ This repository contains the backend and web integration, with the API and sched
 ## Verified here
 
 - TypeScript checking and frontend/collection verification.
-- The local gate passes 52 tests. An isolated temporary Railway PostgreSQL database applied all nine migrations and passed 71 tests across readiness dependencies, domain rules, public-proof privacy, agent quality controls, two-reviewer quorum and reward division, delivery-gated payout, deadline refund, transactions and orchestration. Three container-only tests remain skipped without a Docker host.
+- The local gate passes 53 tests. An isolated temporary Railway PostgreSQL database applied all nine migrations and passed 75 tests across readiness dependencies, NFT-gated customer access, domain rules, public-proof privacy, agent quality controls, two-reviewer quorum and reward division, delivery-gated payout, deadline refund, transactions and orchestration. Three container-only tests remain skipped without a Docker host.
 - Real Ed25519 authentication, replay/CSRF rejection, simultaneous task claims, stale lease rejection, independent review, retry after failed trusted checks, final reward conservation, ownership revocation and privacy.
 - Cancellation during pending funding, recovery of direct wallet broadcasts, finalized-height expiry and confirmation of issuance after an NFT transfer.
 - Configurable planner/builder/reviewer/final model routing, bounded test-and-critique repairs, preserved repair patches and trusted rejection details passed back to builders. These are tested controls, not a claim that actual model output has passed a quality benchmark.

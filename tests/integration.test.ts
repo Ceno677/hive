@@ -86,6 +86,16 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   const evil=await server.app.inject({method:'POST',url:'/api/auth/challenge',headers:{origin:'https://evil.invalid'},payload:{wallet}});
   expect(evil.statusCode).toBe(403);
  });
+ it('requires a live collection NFT before a customer can request a build',async()=>{
+  const customer=Keypair.generate(),address=customer.publicKey.toBase58(),collection=Keypair.generate().publicKey.toBase58();
+  const gated=buildServer({db,c:config({NODE_ENV:'test',DATABASE_URL:enabled,REDIS_URL:process.env.REDIS_URL??'redis://localhost:6381',PUBLIC_ORIGIN:'http://localhost:4320',SEAT_COLLECTION_ADDRESS:collection}),chain,store,model,holderSource:{async snapshot(){return{slot:1n,assets:[]};}},serveStatic:false,logger:false});
+  const challenge=(await gated.app.inject({method:'POST',url:'/api/auth/challenge',payload:{wallet:address}})).json();
+  const signature=bs58.encode(nacl.sign.detached(Buffer.from(challenge.message),customer.secretKey));
+  const signed=await gated.app.inject({method:'POST',url:'/api/auth/verify',payload:{id:challenge.id,wallet:address,signature}}),session=signed.json(),cookie=String(signed.headers['set-cookie']).split(';')[0];
+  const response=await gated.app.inject({method:'POST',url:'/api/requests/quote',headers:{cookie,'x-csrf-token':session.csrf},payload:{requestKey:randomUUID(),prompt:'Build a complete responsive application',public:false,mode:'BUILD'}});
+  expect(response.statusCode).toBe(403);expect(response.json().error).toBe('nft_required');
+  await gated.app.close();
+ });
  it('creates one workflow per idempotency key and rejects changed input',async()=>{
   const pricing={marketAmountBaseUnits:'2000',expiresAt:'2099-01-01T00:00:00.000Z'} as any;
   const key=randomUUID(),a=await engine.create(wallet,key,'Build a private page',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing);
