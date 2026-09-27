@@ -34,6 +34,8 @@ it('selects explicit models per role without changing the base configuration',()
  const c=config({AI_MODEL:'base-model',AI_BUILDER_MODEL:'builder-model',AI_REVIEWER_MODEL:'review-model'});
  expect(modelConfig(c,'BUILDER').AI_MODEL).toBe('builder-model');
  expect(modelConfig(c,'REVIEWER').AI_MODEL).toBe('review-model');
+ expect(modelConfig(c,'PLANNER').AI_REASONING_EFFORT).toBe('medium');
+ expect(modelConfig(c,'BUILDER').AI_REASONING_EFFORT).toBe('high');
  expect(modelConfig(c,'FINAL').AI_MODEL).toBe('base-model');expect(c.AI_MODEL).toBe('base-model');
 });
 it('accepts four role-specific models without requiring a redundant base model',()=>{

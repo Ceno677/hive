@@ -20,7 +20,7 @@ const planJsonSchema={
   }}
  }
 } as const;
-export function modelConfig(c:Config,role:ModelRole):Config{return {...c,AI_MODEL:role==='PRICING'?(c.AI_PRICING_MODEL??'gpt-6-luna'):(c[`AI_${role}_MODEL`]??c.AI_MODEL),AI_REASONING_EFFORT:role==='PRICING'?c.AI_PRICING_REASONING_EFFORT:c.AI_REASONING_EFFORT};}
+export function modelConfig(c:Config,role:ModelRole):Config{return {...c,AI_MODEL:role==='PRICING'?(c.AI_PRICING_MODEL??'gpt-6-luna'):(c[`AI_${role}_MODEL`]??c.AI_MODEL),AI_REASONING_EFFORT:role==='PRICING'?c.AI_PRICING_REASONING_EFFORT:role==='PLANNER'?c.AI_PLANNER_REASONING_EFFORT:c.AI_REASONING_EFFORT};}
 export class HttpModel implements Model {
  constructor(private c:Config){}
  async json(system:string,prompt:string,options?:ModelOptions):Promise<unknown>{

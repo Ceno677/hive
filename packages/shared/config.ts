@@ -38,6 +38,7 @@ const schema = z.object({
   AI_MAX_INPUT_CHARS: z.coerce.number().int().min(50000).max(2000000).default(600000),
   AI_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(3),
   AI_REASONING_EFFORT: z.enum(['none','low','medium','high','xhigh']).default('high'),
+  AI_PLANNER_REASONING_EFFORT: z.enum(['none','low','medium','high','xhigh']).default('medium'),
   AI_PRICING_REASONING_EFFORT: z.enum(['none','low','medium','high','xhigh']).default('low'),
   AI_SERVICE_TIER: z.enum(['auto','default','priority']).default('default'),
   AGENT_REPAIR_PASSES: z.coerce.number().int().min(1).max(8).default(4),
