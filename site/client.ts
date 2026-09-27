@@ -135,7 +135,9 @@ async function mint(){
  if(!config.enabled){status('Seat minting is not open yet.');return;}
  const availability=await api('/mint/availability');
  if(!availability.available){status('All 888 NFT seats are minted or currently reserved.');return;}
- content.append(element('p',availability.remaining+' RANDOM NFT SEATS AVAILABLE'));
+ content.append(element('p',availability.minted+' / '+availability.supply+' NFT SEATS MINTED'));
+ content.append(element('p',availability.remaining+' NFT SEATS REMAIN'));
+ if(availability.reserved)content.append(element('p',availability.reserved+' SEATS ARE TEMPORARILY RESERVED FOR WALLET CONFIRMATION'));
  content.append(element('p','Your NFT identity is selected randomly from the remaining collection when you request the mint.'));
  action('MINT RANDOM NFT ↗',async()=>{
   status('Selecting and reserving your random NFT…');

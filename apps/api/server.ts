@@ -139,12 +139,15 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
  app.get('/api/seats/mine',async r=>{const w=await wallet(r);return db.seat.findMany({where:{ownerWallet:w},select:{id:true,mint:true,checkedAt:true}});});
  app.get('/api/mint/config',async()=>({enabled:!missing(c,mintRequired).length,amount:c.HMD_BURN_AMOUNT??null,displayAmount:'8888',token:'hive',tokenMint:c.HMD_MINT??null,cluster:c.SOLANA_CLUSTER,supply:888,perWallet:c.MAX_SEATS_PER_WALLET??null,sponsored:false,mode:c.PAYMENT_MODE}));
  app.get('/api/mint/availability',async()=>{
-  const [seats,reservations]=await Promise.all([
+  const [supply,seats,reservations]=await Promise.all([
+   db.seat.count(),
    db.seat.findMany({where:{mint:null},orderBy:{id:'asc'},select:{id:true}}),
    db.mintRequest.findMany({where:{state:{in:['QUOTED','PREPARED','SUBMITTED']},OR:[{expiresAt:{gt:new Date()}},{state:{in:['PREPARED','SUBMITTED']}}]},select:{seatId:true}})
   ]);
-  const reserved=new Set(reservations.map(row=>row.seatId)),available=seats.map(row=>row.id).filter(id=>!reserved.has(id));
-  return{available:available.length>0,remaining:available.length};
+  const reservedIds=new Set(reservations.map(row=>row.seatId));
+  const reserved=seats.reduce((count,row)=>count+Number(reservedIds.has(row.id)),0);
+  const availableNow=seats.length-reserved;
+  return{available:availableNow>0,remaining:seats.length,minted:supply-seats.length,reserved,availableNow,supply};
  });
  app.post('/api/mint/quote',async r=>{const b=z.object({requestKey:uuid}).strict().parse(r.body);return payments.mintQuote(await wallet(r),b.requestKey);});
  app.post('/api/mint/prepare',async r=>{const b=z.object({id:uuid}).strict().parse(r.body);return payments.prepareMint(await wallet(r),b.id);});

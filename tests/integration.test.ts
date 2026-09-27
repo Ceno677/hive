@@ -57,10 +57,10 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
  it('reports unminted and unreserved random NFT availability',async()=>{
   await db.seat.createMany({data:[{id:1,imageHash:'availability-1'},{id:2,imageHash:'availability-2'}]});
   const initial=(await server.app.inject('/api/mint/availability')).json();
-  expect(initial.available).toBe(true);expect(initial.remaining).toBe(2);
+  expect(initial).toMatchObject({available:true,remaining:2,minted:0,reserved:0,availableNow:2,supply:2});
   const reservation=await db.mintRequest.create({data:{wallet,requestKey:randomUUID(),inputHash:'availability-test',seatId:1,amount:'8888',expiresAt:new Date(Date.now()+60000)}});
   const reserved=(await server.app.inject('/api/mint/availability')).json();
-  expect(reserved.available).toBe(true);expect(reserved.remaining).toBe(1);
+  expect(reserved).toMatchObject({available:true,remaining:2,minted:0,reserved:1,availableNow:1,supply:2});
  await db.mintRequest.delete({where:{id:reservation.id}});
  await db.seat.deleteMany({where:{id:{in:[1,2]}}});
  });
