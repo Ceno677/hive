@@ -66,8 +66,9 @@ model Worker {
   id String @id @default(uuid())
   wallet String
   owner Wallet @relation(fields: [wallet], references: [address])
-  seatId Int @unique
-  seat Seat @relation(fields: [seatId], references: [id])
+  seatId Int? @unique
+  seat Seat? @relation(fields: [seatId], references: [id])
+  hosted Boolean @default(false)
   deviceKey String @unique
   name String
   capabilities String[]
@@ -160,7 +161,7 @@ model Attempt {
   workerId String
   worker Worker @relation(fields: [workerId], references: [id])
   ownerWallet String
-  seatId Int
+  seatId Int?
   kind String
   generation Int
   state String @default("CLAIMED")

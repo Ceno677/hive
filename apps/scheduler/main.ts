@@ -8,15 +8,20 @@ import {createExecutor} from '../../packages/execution/factory.js';
 import {Engine} from '../../packages/orchestrator/engine.js';
 import {Payments} from '../../packages/payments/requests.js';
 import {Scheduler} from '../../packages/orchestrator/scheduler.js';
+import {HostedPool} from '../../packages/orchestrator/hosted-pool.js';
+import {ProviderRuntime} from '../../worker/daemon/runtime.js';
 import {Outbox,queueConnection} from '../../packages/queue/service.js';
-const c=config(),chain=createChain(c),store=artifactStore(c),engine=new Engine(db,chain,store,c);
-const scheduler=new Scheduler(db,engine,new Payments(db,chain,engine,c),store,createExecutor(c),new HttpModel(modelConfig(c,'REVIEWER')),new HttpModel(modelConfig(c,'FINAL')));
+const c=config(),chain=createChain(c),store=artifactStore(c),engine=new Engine(db,chain,store,c),executor=createExecutor(c);
+const reviewer=new HttpModel(modelConfig(c,'REVIEWER'));
+const scheduler=new Scheduler(db,engine,new Payments(db,chain,engine,c),store,executor,reviewer,new HttpModel(modelConfig(c,'FINAL')));
+const hosted=new HostedPool(db,engine,store,executor,new ProviderRuntime(new HttpModel(modelConfig(c,'BUILDER')),executor,reviewer,c.AGENT_REPAIR_PASSES),c);
 const outbox=new Outbox(db,c.REDIS_URL);
 let busy=false,stopping=false;
 const report=(e:unknown)=>console.error(JSON.stringify({level:'error',service:'scheduler',message:e instanceof Error?e.message:'failure'}));
 async function tick(){
  if(busy||stopping)return;busy=true;
  try{await scheduler.tick(report);}catch(e){report(e);}
+ try{await hosted.tick(report);}catch(e){report(e);}
  try{await outbox.flush();}catch(e){report(e);}
  finally{busy=false;}
 }

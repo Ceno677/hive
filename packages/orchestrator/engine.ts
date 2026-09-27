@@ -1,6 +1,6 @@
 import type {PrismaClient, Prisma, Worker} from '@prisma/client';
 import {serial,event,type Tx} from '../database/client.js';
-import {Fault,validatePlan,hash,checkWrites,skills,type Bundle,split,canonical,digest,secret,reputation} from '../shared/domain.js';
+import {Fault,validatePlan,hash,checkWrites,skills,type Bundle,split,canonical,digest,secret,reputation,independent} from '../shared/domain.js';
 import type {Chain} from '../solana/chain.js';
 import type {ArtifactStore} from '../artifacts/store.js';
 import type {Config} from '../shared/config.js';
@@ -14,6 +14,8 @@ const rewardBudget=(flow:{amount:string;pricing:unknown})=>{
 export class Engine {
  constructor(public db:PrismaClient,public chain:Chain,public store:ArtifactStore,public c:Config){}
  async requireOwned(w:Worker){
+  if(w.hosted)return;
+  if(w.seatId===null)throw new Fault(403,'worker_seat_required');
   const seat=await this.db.seat.findUniqueOrThrow({where:{id:w.seatId}});
   if(!seat.mint)throw new Fault(403,'seat_not_minted');
   if(seat.ownerWallet===w.wallet&&seat.checkedAt&&seat.checkedAt.getTime()>Date.now()-this.c.OWNERSHIP_RECHECK_SECONDS*1000)return;
@@ -100,13 +102,13 @@ export class Engine {
    if(kind==='BUILD'&&buildSamples>=this.c.WORKER_REPUTATION_SAMPLE&&reputation(w.buildAccepted,w.buildRejected,w.timeouts)<this.c.BUILDER_MIN_REPUTATION)throw new Fault(403,'builder_reputation_below_policy');
    if(kind==='VERIFY'&&verifySamples>=this.c.WORKER_REPUTATION_SAMPLE&&reputation(w.verifyAccepted,w.verifyRejected,w.timeouts)<this.c.VERIFIER_MIN_REPUTATION)throw new Fault(403,'verifier_reputation_below_policy');
    if(await tx.attempt.count({where:{workerId:w.id,state:{in:live},leaseUntil:{gt:new Date()}}})>=w.maxConcurrent)return null;
-   const candidates=await tx.task.findMany({where:{state:kind==='BUILD'?'QUEUED':'SUBMITTED',requiredSkills:{hasEvery:[]},workflow:{status:{in:['QUEUED','RUNNING','VERIFYING']}}},orderBy:{id:'asc'},take:100,include:{attempts:{include:{verification:true},orderBy:{startedAt:'desc'}}}});
+   const candidates=await tx.task.findMany({where:{state:kind==='BUILD'?'QUEUED':'SUBMITTED',requiredSkills:{hasEvery:[]},workflow:{status:{in:['QUEUED','RUNNING','VERIFYING']}}},orderBy:{id:'asc'},take:100,include:{attempts:{include:{verification:true,worker:true},orderBy:{startedAt:'desc'}}}});
    const eligible=candidates.filter(t=>{
     if(!t.requiredSkills.every(s=>w.capabilities.includes(s)))return false;
     if(kind==='BUILD')return true;
     const built=t.attempts.find(a=>a.kind==='BUILD'&&a.state==='SUBMITTED'&&a.submissionHash);
-    if(!built||built.workerId===w.id||built.seatId===w.seatId||built.ownerWallet===w.wallet)return false;
-     return !t.attempts.some(a=>a.kind==='VERIFY'&&a.verification?.artifactHash===built.submissionHash&&(a.workerId===w.id||a.seatId===w.seatId||a.ownerWallet===w.wallet));
+    if(!built||!independent(built.worker,w))return false;
+     return !t.attempts.some(a=>a.kind==='VERIFY'&&a.verification?.artifactHash===built.submissionHash&&!independent(a.worker,w));
     });
    if(kind==='VERIFY'){
     const pairings=new Map((await tx.pairing.findMany({where:{verifier:w.id}})).map(p=>[p.builder,p.count]));
@@ -165,8 +167,8 @@ export class Engine {
    }
    const a=await this.active(tx,worker,id,generation);
    if(a.kind!=='VERIFY')throw new Fault(403,'not_verifier');
-   const built=await tx.attempt.findFirstOrThrow({where:{taskId:a.taskId,kind:'BUILD',state:'SUBMITTED'},orderBy:{startedAt:'desc'}});
-   if(built.submissionHash!==input.artifactHash||built.ownerWallet===worker.wallet||built.seatId===worker.seatId||built.workerId===worker.id)throw new Fault(403,'independence_or_hash');
+   const built=await tx.attempt.findFirstOrThrow({where:{taskId:a.taskId,kind:'BUILD',state:'SUBMITTED'},include:{worker:true},orderBy:{startedAt:'desc'}});
+   if(built.submissionHash!==input.artifactHash||!independent(built.worker,worker))throw new Fault(403,'independence_or_hash');
    const review=await tx.verification.create({data:{attemptId:id,artifactHash:input.artifactHash,decision:input.decision,checks:input.checks as Prisma.InputJsonValue,issues:input.issues as Prisma.InputJsonValue}});
    await tx.attempt.update({where:{id},data:{state:'SUBMITTED',finishedAt:new Date()}});
    await tx.pairing.upsert({where:{builder_verifier:{builder:built.workerId,verifier:worker.id}},create:{builder:built.workerId,verifier:worker.id},update:{count:{increment:1},lastAt:new Date()}});
@@ -216,7 +218,15 @@ export class Engine {
   return serial(async tx=>{
    const f=await tx.workflow.findUniqueOrThrow({where:{id},include:{tasks:{include:{attempts:{where:{kind:'BUILD'},orderBy:{startedAt:'desc'},take:1}}}}});
    if(f.status!=='VERIFYING'||f.tasks.some(t=>t.state!=='ACCEPTED'))return;
-   if(!passed){await tx.workflow.update({where:{id},data:{status:'FAILED',failure:'final_validation_failed'}});await event(tx,id,'workflow.failed',{evidence});return;}
+   if(!passed){
+    const sink=await tx.task.findFirstOrThrow({where:{workflowId:id,dependents:{none:{}}},include:{attempts:{where:{kind:'BUILD'},orderBy:{startedAt:'desc'},take:1}}});
+    if(sink.buildCount>=3){await tx.workflow.update({where:{id},data:{status:'FAILED',failure:'final_validation_attempt_limit'}});await event(tx,id,'workflow.failed',{evidence});return;}
+    if(sink.acceptedArtifact)await tx.artifact.update({where:{id:sink.acceptedArtifact},data:{accepted:false}});
+    if(sink.attempts[0])await tx.attempt.update({where:{id:sink.attempts[0].id},data:{feedback:{stage:'FINAL_VALIDATION',evidence} as Prisma.InputJsonValue}});
+    await tx.task.update({where:{id:sink.id},data:{state:'QUEUED',acceptedArtifact:null}});
+    await tx.workflow.update({where:{id},data:{status:'QUEUED',failure:null}});
+    await event(tx,id,'workflow.final_validation_rejected',{taskId:sink.id,evidence});return;
+   }
    if(f.mode==='SOLANA_APP'&&['PROGRAM','FRONTEND'].includes(f.stage)){
     await tx.workflow.update({where:{id},data:{status:'AWAITING_APPROVAL',stage:f.stage==='PROGRAM'?'DEPLOYMENT':'HOSTING'}});
     await event(tx,id,'workflow.approval_required',{stage:f.stage==='PROGRAM'?'DEPLOYMENT':'HOSTING'});return;

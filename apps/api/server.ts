@@ -13,7 +13,7 @@ import {serial} from '../../packages/database/client.js';
 import {Auth} from '../../packages/auth/service.js';
 import {Engine} from '../../packages/orchestrator/engine.js';
 import {Payments} from '../../packages/payments/requests.js';
-import {Fault,digest,hash,secret,bundleSchema,planSchema,keySchema,skills} from '../../packages/shared/domain.js';
+import {Fault,digest,hash,secret,bundleSchema,planSchema,keySchema,skills,independentCapacity} from '../../packages/shared/domain.js';
 import {type Config,missing,missingModels,paymentKeys,mintKeys,deliveryKeys} from '../../packages/shared/config.js';
 import {plan,type Model} from '../../packages/ai/provider.js';
 import type {Chain} from '../../packages/solana/chain.js';
@@ -168,7 +168,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   for(const task of planned.tasks){
    if(task.skill==='rust'&&!c.RUST_SANDBOX_IMAGE)throw new Fault(422,'rust_execution_not_configured');
    const capable=workers.filter(w=>skills[task.skill].requiredSkills.every(s=>w.capabilities.includes(s)));
-   if(new Set(capable.map(w=>w.wallet)).size<c.REVIEW_QUORUM+1||new Set(capable.map(w=>w.seatId)).size<c.REVIEW_QUORUM+1)throw new Fault(422,'independent_capacity_unavailable',(c.REVIEW_QUORUM+1)+' independent hosted agents are needed for '+task.skill);
+   if(!independentCapacity(capable,c.REVIEW_QUORUM+1))throw new Fault(422,'independent_capacity_unavailable',(c.REVIEW_QUORUM+1)+' independent hosted agents are needed for '+task.skill);
   }
   if(!chain.tokenInfo)throw new Fault(503,'token_info_unavailable');
   const token=await chain.tokenInfo();

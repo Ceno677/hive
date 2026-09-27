@@ -104,6 +104,22 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   await expect(engine.create(wallet,key,'Changed private page',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing)).rejects.toThrow('request_key_conflict');
  });
  it('does not schedule unfunded work',async()=>expect(await engine.claim(builder,'BUILD')).toBeNull());
+ it('runs build and independent review through hosted agents without NFT seats',async()=>{
+  await db.worker.updateMany({where:{id:{in:[builder.id,verifier.id]}},data:{status:'SUSPENDED'}});
+  const hosted=[];
+  for(const index of [1,2])hosted.push(await db.worker.create({data:{wallet,seatId:null,hosted:true,deviceKey:Keypair.generate().publicKey.toBase58(),name:'Hosted integration '+index,capabilities:['html'],maxConcurrent:1,status:'ONLINE',tokenHash:digest(randomUUID()),expiresAt:new Date('2100-01-01'),heartbeatAt:new Date()}}));
+  const pricing={marketAmountBaseUnits:'2000',expiresAt:'2099-01-01T00:00:00.000Z'} as any;
+  const flow=await engine.create(wallet,randomUUID(),'Run entirely on hosted agents',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing);
+  await admit(engine,flow.id);
+  const build=await engine.claim(hosted[0],'BUILD');expect(build).toBeTruthy();
+  await engine.submit(hosted[0],build!.attempt.id,build!.attempt.generation,{files:[{path:'index.html',content:'<html><body>Hosted</body></html>'}]});
+  const assignment=await engine.claim(hosted[1],'VERIFY');expect(assignment).toBeTruthy();
+  const review=await engine.review(hosted[1],assignment!.attempt.id,assignment!.attempt.generation,{artifactHash:assignment!.submission!.hash,decision:'ACCEPT',checks:[{name:'hosted',passed:true,evidence:'fixture'}],issues:[]});
+  await engine.resolve(review.id,true,{exitCode:0});
+  expect((await db.task.findUniqueOrThrow({where:{id:build!.task.id}})).state).toBe('ACCEPTED');
+  await db.workflow.update({where:{id:flow.id},data:{status:'CANCELLED'}});
+  await db.worker.updateMany({where:{id:{in:hosted.map(item=>item.id)}},data:{status:'SUSPENDED'}});
+ });
  it('atomically admits payment and prevents simultaneous duplicate claims',async()=>{
   await admit(engine,flowId);
   const results=await Promise.all([engine.claim(builder,'BUILD'),engine.claim(verifier,'BUILD')]);
@@ -134,6 +150,20 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   await engine.recover();
   await expect(engine.renew(builder,job!.attempt.id,job!.attempt.generation)).rejects.toThrow('stale_lease');
   expect((await db.task.findUniqueOrThrow({where:{id:attempt.task.id}})).state).toBe('QUEUED');
+ });
+ it('sends a final semantic defect back to the integration task for repair',async()=>{
+  const pricing={marketAmountBaseUnits:'2000',expiresAt:'2099-01-01T00:00:00.000Z'} as any;
+  const flow=await engine.create(wallet,randomUUID(),'Repair a final semantic defect',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing);
+  const task=await db.task.findFirstOrThrow({where:{workflowId:flow.id}}),bundle={files:[{path:'index.html',content:'<html><button>Overflow</button></html>'}]},stored=await store.put(bundle);
+  const build=await db.attempt.create({data:{taskId:task.id,workerId:builder.id,ownerWallet:builder.wallet,seatId:builder.seatId,kind:'BUILD',generation:1,state:'SUBMITTED',leaseUntil:new Date(Date.now()+60000),finishedAt:new Date(),submissionHash:stored.hash}});
+  const artifact=await db.artifact.create({data:{workflowId:flow.id,taskId:task.id,attemptId:build.id,hash:stored.hash,objectKey:stored.key,bytes:stored.bytes,accepted:true}});
+  await db.task.update({where:{id:task.id},data:{state:'ACCEPTED',generation:1,buildCount:1,acceptedArtifact:artifact.id}});
+  await db.workflow.update({where:{id:flow.id},data:{status:'VERIFYING'}});
+  await engine.finish(flow.id,{semantic:{passed:false,reason:'Completion button visibly overflows'}},false);
+  const repaired=await db.workflow.findUniqueOrThrow({where:{id:flow.id}}),queued=await db.task.findUniqueOrThrow({where:{id:task.id}}),attemptRow=await db.attempt.findUniqueOrThrow({where:{id:build.id}});
+  expect(repaired.status).toBe('QUEUED');expect(repaired.failure).toBeNull();expect(queued.state).toBe('QUEUED');expect(queued.acceptedArtifact).toBeNull();
+  expect((await db.artifact.findUniqueOrThrow({where:{id:artifact.id}})).accepted).toBe(false);expect(attemptRow.feedback).toMatchObject({stage:'FINAL_VALIDATION'});
+  await db.workflow.update({where:{id:flow.id},data:{status:'CANCELLED'}});
  });
  it('requires final integration before creating rewards and preserves accounting',async()=>{
   const job=await engine.claim(builder,'BUILD');expect(job).toBeTruthy();

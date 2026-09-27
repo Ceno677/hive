@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {validatePlan,split,independent,safePath,checkWrites,hash,reputation} from '../packages/shared/domain.js';
+import {validatePlan,split,independent,independentCapacity,safePath,checkWrites,hash,reputation} from '../packages/shared/domain.js';
 const task=(key:string,dependencies:string[]=[])=>({key,title:key,instructions:'Build a useful site',skill:'static',dependencies,paths:['index.html'],acceptance:['Site renders correctly']});
 describe('domain invariants',()=>{
  it('accepts a fanout with final join',()=>expect(validatePlan({title:'Example',tasks:[task('a'),task('b'),task('final',['a','b'])]}).tasks).toHaveLength(3));
@@ -18,6 +18,12 @@ describe('domain invariants',()=>{
   expect(independent(a,{id:'b',wallet:'owner',seatId:2})).toBe(false);
   expect(independent(a,{id:'b',wallet:'other',seatId:1})).toBe(false);
   expect(independent(a,{id:'b',wallet:'other',seatId:2})).toBe(true);
+ });
+ it('allows separate hosted agents to review without NFT seats',()=>{
+  const hosted=[1,2,3].map(id=>({id:String(id),wallet:'treasury',seatId:null,hosted:true}));
+  expect(independent(hosted[0],hosted[1])).toBe(true);
+  expect(independentCapacity(hosted,3)).toBe(true);
+  expect(independentCapacity(hosted,4)).toBe(false);
  });
  it.each(['../secret','/etc/passwd','C:/secret','a/../b','a\\b','a//b'])('rejects unsafe path %s',p=>expect(safePath.safeParse(p).success).toBe(false));
  it('enforces task write scope',()=>expect(()=>checkWrites({files:[{path:'api/secret',content:'x'}]},['ui'])).toThrow());

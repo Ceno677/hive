@@ -49,8 +49,19 @@ export function split(amount: bigint, builderBps:number, verifierBps:number) {
  const builder=amount*BigInt(builderBps)/10000n, verifier=amount*BigInt(verifierBps)/10000n;
  return {builder,verifier,protocol:amount-builder-verifier};
 }
-export function independent(a:{id:string;wallet:string;seatId:number}, b:{id:string;wallet:string;seatId:number}) {
- return a.id!==b.id && a.wallet!==b.wallet && a.seatId!==b.seatId;
+export type WorkerIdentity={id:string;wallet:string;seatId:number|null;hosted?:boolean};
+export function independent(a:WorkerIdentity,b:WorkerIdentity) {
+ if(a.id===b.id)return false;
+ if(a.hosted&&b.hosted)return true;
+ return a.wallet!==b.wallet&&a.seatId!==null&&b.seatId!==null&&a.seatId!==b.seatId;
+}
+export function independentCapacity(workers:WorkerIdentity[],needed:number) {
+ const search=(chosen:WorkerIdentity[],start:number):boolean=>{
+  if(chosen.length>=needed)return true;
+  for(let i=start;i<workers.length;i++)if(chosen.every(current=>independent(current,workers[i]))&&search([...chosen,workers[i]],i+1))return true;
+  return false;
+ };
+ return search([],0);
 }
 export function reputation(accepted:number,rejected:number,timeouts:number) {
  return (accepted+2)/(accepted+rejected+timeouts+4);

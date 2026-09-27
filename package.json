@@ -47,7 +47,9 @@
     "protocol:collection:delegate": "tsx infra/scripts/delegate-collection.ts",
     "protocol:pause": "tsx infra/scripts/set-protocol-pause.ts",
     "launch:check": "tsx infra/scripts/launch-check.ts",
-    "pricing:smoke": "tsx infra/scripts/test-pricing-model.ts"
+    "pricing:smoke": "tsx infra/scripts/test-pricing-model.ts",
+    "test:agent:benchmark": "tsx infra/scripts/test-agent-benchmark.ts",
+    "test:agent:browser": "tsx infra/scripts/test-benchmark-browser.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",

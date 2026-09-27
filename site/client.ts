@@ -67,7 +67,16 @@ async function account(){
   if(!list.length)status('Your submitted projects will appear here.');
   for(const f of list)action(f.title+' / '+f.status,()=>viewFlow(f.id),true);
  });
+ action('MY NFT SEATS',showSeats,true);
  action('DISCONNECT',async()=>{await api('/auth/logout',{});wallet='';csrf='';sessionStorage.removeItem('hive-csrf');document.querySelector('#wallet')!.textContent='CONNECT WALLET ↗';dialog.close();},true);
+}
+async function showSeats(){
+ show('YOUR SEATS','NFT access to hosted agents.');
+ const seats=await api('/seats/mine');
+ if(!seats.length){status('No hive.md NFT is currently verified in this wallet.');action('MINT A SEAT ↗',mint);return;}
+ for(const seat of seats)content.append(element('p','#'+String(seat.id).padStart(3,'0')+' / '+(seat.mint??'MINT PENDING')));
+ status('Access active. Submit a build and the hosted hive agents will work automatically.');
+ action('BACK TO WALLET',account,true);
 }
 async function mint(){
  show('NFT SEAT','Take your seat.');
@@ -146,6 +155,7 @@ async function viewFlow(id:string){
   },true);
  }
  content.append(list);
+ action('VIEW BUILD PROOF',()=>showProof(id),true);
  for(const release of flow.releases??[]){
   content.append(element('p',release.kind.replaceAll('_',' ')+' / '+release.state.replaceAll('_',' ')));
   if(release.state==='COMPLETED'&&release.url?.startsWith('https://'))action('OPEN '+release.kind.replaceAll('_',' ')+' ↗',()=>{window.open(release.url,'_blank','noopener,noreferrer');},true);
@@ -178,6 +188,25 @@ async function viewFlow(id:string){
  action('REFRESH',()=>viewFlow(id),true);
  stream=new EventSource('/api/workflows/'+id+'/events/stream');
  stream.onmessage=e=>{const event=JSON.parse(e.data);status(event.type.replaceAll('.',' '));};
+}
+async function showProof(id:string){
+ show('PROOF OF WORK','Build and independent verification.');
+ const tasks=await api('/workflows/'+id+'/tasks');
+ if(!tasks.length)status('The plan is still being prepared.');
+ for(const task of tasks){
+  content.append(element('p',task.title+' / '+task.state));
+  const acceptance=Array.isArray(task.policy?.acceptance)?task.policy.acceptance:[];
+  for(const criterion of acceptance)content.append(element('p','ACCEPTANCE / '+criterion));
+  for(const attempt of task.attempts??[]){
+   content.append(element('p',attempt.kind+' / '+(attempt.seatId===null?'HOSTED AGENT':'NFT #'+String(attempt.seatId).padStart(3,'0'))+' / '+attempt.state));
+   const verification=attempt.verification;
+   if(verification){
+    content.append(element('p','VERIFIER / '+verification.state+' / '+verification.decision));
+    for(const check of Array.isArray(verification.checks)?verification.checks:[])content.append(element('p',(check.passed?'PASS':'FAIL')+' / '+check.name+(check.evidence?' / '+check.evidence:'')));
+   }
+  }
+ }
+ action('BACK TO BUILD',()=>viewFlow(id),true);
 }
 dialog.addEventListener('close',()=>stream?.close());
 document.querySelector<HTMLButtonElement>('#wallet')!.onclick=()=>account().catch(e=>status(e.message));
