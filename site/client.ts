@@ -26,7 +26,8 @@ async function api(path:string,body?:unknown){
  const d=await r.json().catch(()=>({}));
  if(!r.ok){
  const messages:Record<string,string>={sign_in_required:'Connect your wallet to continue.',session_expired:'Please reconnect your wallet.',nft_required:'Hold at least one hive.md NFT in this wallet to request a build.',integration_not_configured:'The network is not open for transactions yet.',execution_not_configured:'The build service is not available yet.',independent_capacity_unavailable:'The hive is waiting for available build and review agents. Try again shortly.',planner_output_invalid:'Planning could not produce a valid build plan. Please retry.',model_request_failed:'The planning model is temporarily unavailable. Please retry.',model_output_truncated:'The requested project needs a smaller brief. Please shorten it and retry.',seat_unavailable:'That seat has already been minted.',seat_reserved:'Someone is currently minting that seat. Choose another.',insufficient_hmd_balance:'This wallet needs at least 8,888 HMD to mint.',insufficient_sol_balance:'This wallet needs more SOL for NFT rent and network fees.',transaction_rejected:'Solana rejected the transaction. Nothing was burned or minted.',broadcast_unconfirmed:'The RPC could not confirm submission. Check the transaction before trying again.',quote_not_payable:'This quote expired. Request a new quote.',payment_not_finalized:'Your transaction is still confirming.',refund_not_available:'The escrow refund is not available yet.',csrf_required:'Please reconnect your wallet.',transaction_mismatch:'The transaction changed. Request a new quote.',human_verification_required:'Complete the anti-bot check to request a quote.',human_verification_failed:'The anti-bot check expired. Please try again.',human_verification_unavailable:'The anti-bot service is temporarily unavailable.',repository_not_connected:'Connect this GitHub repository before delivery.',repository_workflows_not_allowed:'Choose a clean delivery repository without GitHub Actions workflows.',repository_tree_too_large:'Choose a smaller clean repository for delivery.',github_authorization_failed:'GitHub authorization failed. Please reconnect GitHub.'};
-  throw Error(messages[d.error]??d.message??'The network could not complete this request.');
+  const error=Error(messages[d.error]??d.message??'The network could not complete this request.');
+  (error as any).code=d.error;throw error;
  }
  return d;
 }
@@ -91,6 +92,15 @@ async function connect(){
  document.querySelector('#wallet')!.textContent=wallet.slice(0,4)+'…'+wallet.slice(-4)+' ↗';
 }
 async function ensure(){if(!wallet||!csrf||!selectedWalletName){if(!selectedWalletName)await chooseWallet();else await connect();}}
+async function withFreshSession<T>(operation:()=>Promise<T>){
+ try{return await operation();}
+ catch(error){
+  if(!['session_expired','csrf_required','sign_in_required'].includes(String((error as any)?.code)))throw error;
+  wallet='';csrf='';sessionStorage.removeItem('hive-csrf');
+  document.querySelector('#wallet')!.textContent='CONNECT WALLET â†—';
+  await ensure();return operation();
+ }
+}
 async function sign(prepared:{transaction:string}){
  const p=provider(),tx=Transaction.from(Buffer.from(prepared.transaction,'base64'));
  status('Review and approve the transaction in your wallet.');
@@ -153,7 +163,8 @@ async function draft(){
  action('GET MY QUOTE ↗',async()=>{
   await ensure();status('Planning your project…');
   const turnstileToken=await humanToken();
-  const q=await api('/requests/quote',{requestKey:crypto.randomUUID(),prompt,public:false,mode,...(turnstileToken?{turnstileToken}:{})});
+  const requestKey=crypto.randomUUID(),quoteBody={requestKey,prompt,public:false,mode,...(turnstileToken?{turnstileToken}:{})};
+  const q=await withFreshSession(()=>api('/requests/quote',quoteBody));
   show('YOUR QUOTE',q.title);
   const token=await api('/token');content.append(element('p',amount(q.amount,token.decimals)+' $HMD'));
   if(q.pricing){
