@@ -50,7 +50,7 @@ try{
  await page.getByRole('status').filter({hasText:'not open'}).waitFor();
  await page.locator('#close-dialog').click();
  await page.locator('#theme-toggle').click();
- await page.locator('#brief').fill('agent pls mint');
+ await page.locator('#brief').fill('mint');
  await page.locator('#job-form').evaluate((form:HTMLFormElement)=>form.requestSubmit());
  await page.getByRole('status').filter({hasText:'Seat minting is not open yet'}).waitFor();
  await page.screenshot({path:'.hive/ui-mint-dialog.png'});

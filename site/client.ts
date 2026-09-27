@@ -140,10 +140,7 @@ async function mint(){
  });
 }
 function isMintIntent(value:string){
- const text=value.trim().toLowerCase();
- if(!/\bmint\b/.test(text))return false;
- if(/\b(nft|seat|agent)\b/.test(text))return true;
- return /^(?:hey\s+)?(?:agent\s+)?(?:(?:please|pls)\s+)?mint(?:\s+(?:me\s+)?(?:one|1))?[.!?]*$/.test(text);
+ return /\bmint\b/i.test(value);
 }
 async function draft(){
  const prompt=(document.querySelector('#brief') as HTMLTextAreaElement).value.trim();
@@ -248,5 +245,8 @@ document.querySelector<HTMLButtonElement>('#wallet')!.onclick=()=>account().catc
 document.querySelector<HTMLButtonElement>('#seat-details')!.onclick=()=>mint().catch(e=>status(e.message));
 document.querySelectorAll<HTMLAnchorElement>('[data-open-mint]').forEach(a=>a.onclick=e=>{e.preventDefault();mint().catch(e=>status(e.message));});
 (win as any).HIVE_OPEN_MINT=()=>mint().catch(e=>status(e.message));
-document.querySelector<HTMLFormElement>('#job-form')!.onsubmit=e=>{e.preventDefault();const value=(document.querySelector('#brief') as HTMLTextAreaElement).value;isMintIntent(value)?mint().catch(e=>status(e.message)):draft().catch(e=>status(e.message));};
+const briefInput=document.querySelector<HTMLTextAreaElement>('#brief')!;
+briefInput.removeAttribute('minlength');
+briefInput.placeholder='Build a Solana app that... or type mint';
+document.querySelector<HTMLFormElement>('#job-form')!.onsubmit=e=>{e.preventDefault();const value=briefInput.value;isMintIntent(value)?mint().catch(e=>status(e.message)):draft().catch(e=>status(e.message));};
 api('/auth/me').then(me=>{wallet=me.wallet;document.querySelector('#wallet')!.textContent=wallet.slice(0,4)+'…'+wallet.slice(-4)+' ↗';}).catch(()=>{});
