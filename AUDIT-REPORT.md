@@ -15,7 +15,7 @@ The source implementation covers the promised build → independent verify → s
 | Burn HMD and atomically mint the NFT | Implemented | One Anchor instruction burns classic SPL HMD and creates/verifies the NFT, master edition and request receipt. Needs live validator/devnet proof. |
 | NFT is the agent identity/access seat | Implemented | Wallet-signed pairing, current collection/ownership check, scoped credential, revocation and bounded transfer recheck. |
 | Independent operators connect machines/agents | Implemented | `npm run agent:pair`, holder-local wallet key and provider secrets, heartbeat/capability protocol and daemon. Customers requesting builds remain web-only. |
-| Dynamic HMD price shown before payment | Implemented | AI effort estimate, configured market benchmark, 50% charge, liquidity-checked HMD conversion, short quote lock, idempotency and exact prepared-message verification. |
+| Dynamic HMD price shown before payment | Implemented | AI effort estimate, configured market benchmark, 50% charge, short quote lock, idempotency and exact prepared-message verification. New tokens may use a disclosed manual launch price; removing it restores liquidity-checked DEX conversion. |
 | Escrow and full deadline refund | Implemented | Per-job PDA escrow, finalized admission, deadline bound into funding, coordinator refund plus requester-signed onchain fallback after expiry. |
 | Specialized agents collaborate | Implemented | Validated DAG, capability matching, atomic claims, fenced leases, immutable artifact overlays and maximum 12 tasks. |
 | Builder writes code and runs tests | Implemented | Bounded build/test/critique/repair loop inside network-disabled resource-limited containers. |
@@ -23,9 +23,9 @@ The source implementation covers the promised build → independent verify → s
 | Higher-quality assignment process | Implemented | Capability/capacity gate before charging, Bayesian-smoothed reputation cutoffs, correct-rejection credit and repeated-pairing penalty. |
 | Accepted code goes to GitHub | Implemented | Artifact-bound owner approval, deterministic retry-safe branch, commit SHA/branch/repository record; payout waits for this delivery. |
 | Websites/programs can deploy | Implemented with boundary | Netlify draft validation and devnet Solana staged deployment exist. Automatic mainnet program deployment is deliberately blocked. |
-| Builder/verifier/treasury split | Implemented | Integer basis-point split; verifier share is divided across the accepted quorum; remainder goes to treasury; receipt PDAs prevent replay. |
+| Treasury-funded agent rewards and fee burn | Implemented | Capacity is reserved before work starts. Full market value is split 70% to the builder and 15% to each of two reviewers; after payout the complete customer fee burns with retry-safe receipts. |
 | Inspectable proof of work | Implemented | Opt-in sanitized workflow/task/event/worker/artifact APIs, hashes, identities, decisions, timestamps and delivery URLs; source and private briefs remain authorized-only. |
-| Periodic holder distributions | Implemented, launch-gated | Retained protocol rewards are assigned once to an immutable DAS collection snapshot, capped at two eligible NFTs per wallet, exactly allocated and paid with retry-safe receipts. Disabled until live snapshot and payout smoke tests pass. |
+| Periodic holder distributions | Disabled | Job fees no longer fund this ledger. A separate treasury-funded pool must be deliberately implemented and tested before enabling holder payouts. |
 
 ## Important controls verified in source
 

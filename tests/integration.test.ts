@@ -17,7 +17,7 @@ import {join} from 'node:path';
 const enabled=process.env.TEST_DATABASE_URL;
 describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/model are explicit test doubles)',()=>{
  const db=new PrismaClient({datasourceUrl:enabled});
- const c=config({NODE_ENV:'test',DATABASE_URL:enabled,PUBLIC_ORIGIN:'http://localhost:4320',REVIEW_QUORUM:'1'});
+ const c=config({NODE_ENV:'test',DATABASE_URL:enabled,REDIS_URL:process.env.REDIS_URL??'redis://localhost:6381',PUBLIC_ORIGIN:'http://localhost:4320',REVIEW_QUORUM:'1'});
  let path:string,store:LocalArtifacts,engine:Engine,server:ReturnType<typeof buildServer>;
  const actor=Keypair.generate(),other=Keypair.generate(),wallet=actor.publicKey.toBase58();
  const second=other.publicKey.toBase58(),sessionTokens:string[]=[];
@@ -87,10 +87,11 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   expect(evil.statusCode).toBe(403);
  });
  it('creates one workflow per idempotency key and rejects changed input',async()=>{
-  const key=randomUUID(),a=await engine.create(wallet,key,'Build a private page',plan,false,'1000',8000,1500,wallet,24);
-  const b=await engine.create(wallet,key,'Build a private page',plan,false,'1000',8000,1500,wallet,24);
+  const pricing={marketAmountBaseUnits:'2000',expiresAt:'2099-01-01T00:00:00.000Z'} as any;
+  const key=randomUUID(),a=await engine.create(wallet,key,'Build a private page',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing);
+  const b=await engine.create(wallet,key,'Build a private page',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing);
   expect(a.id).toBe(b.id);flowId=a.id;
-  await expect(engine.create(wallet,key,'Changed private page',plan,false,'1000',8000,1500,wallet,24)).rejects.toThrow('request_key_conflict');
+  await expect(engine.create(wallet,key,'Changed private page',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing)).rejects.toThrow('request_key_conflict');
  });
  it('does not schedule unfunded work',async()=>expect(await engine.claim(builder,'BUILD')).toBeNull());
  it('atomically admits payment and prevents simultaneous duplicate claims',async()=>{
@@ -137,8 +138,23 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   const release=await db.release.create({data:{workflowId:flowId,state:'COMPLETED',kind:'GITHUB',target:'fixture/repository',artifactHash:accepted.hash,url:'https://github.com/fixture/repository/tree/hive/release-test'}});
   await engine.delivered(flowId,release.id);await engine.delivered(flowId,release.id);
   const rewards=await db.reward.findMany({where:{workflowId:flowId}});
-  expect(rewards.reduce((s,r)=>s+BigInt(r.amount),0n)).toBe(1000n);
-  expect(rewards).toHaveLength(3);
+  expect(rewards.reduce((s,r)=>s+BigInt(r.amount),0n)).toBe(2000n);
+  expect(rewards).toHaveLength(2);
+  let payouts=0,burns=0;
+  const payments=new Payments(db,{...chain,async settle(){payouts++;return'TEST_ONLY_'+randomUUID();},async burnFee(){burns++;return'TEST_ONLY_'+randomUUID();}},engine,c);
+  await payments.payRewards();await payments.payRewards();
+  expect(payouts).toBe(2);expect(burns).toBe(1);
+  expect((await db.ledgerEntry.findUniqueOrThrow({where:{operationKey:'burn:'+flowId}})).amount).toBe('1000');
+ });
+ it('refunds instead of starting when treasury cannot reserve fee burn and market-rate rewards',async()=>{
+  const constrained=new Engine(db,{...chain,async treasuryBalance(){return 2999n;}},store,c),pricing={marketAmountBaseUnits:'2000',expiresAt:'2099-01-01T00:00:00.000Z'} as any;
+  const flow=await constrained.create(wallet,randomUUID(),'Build only with reserved treasury rewards',plan,false,'1000',8000,2000,wallet,24,'BUILD',undefined,pricing);
+  await db.workflow.update({where:{id:flow.id},data:{deadlineAt:new Date(Date.now()+24*3600000)}});
+  const result=await constrained.admit(flow.id,'TEST_ONLY_'+randomUUID());
+  expect(result.status).toBe('REFUND_PENDING');expect(result.failure).toBe('treasury_capacity_unavailable');
+  expect(await db.task.count({where:{workflowId:flow.id,state:'QUEUED'}})).toBe(0);
+  expect(await db.reward.count({where:{workflowId:flow.id}})).toBe(0);
+  await db.workflow.update({where:{id:flow.id},data:{status:'CANCELLED'}});
  });
  it('hides private workflow data and requires ownership for artifacts',async()=>{
   const snapshot=(await server.app.inject('/api/network/snapshot')).json();
@@ -168,7 +184,7 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   expect((await db.worker.findUniqueOrThrow({where:{id:builder.id}})).status).toBe('SUSPENDED');revoked=false;
  });
  it('defers Solana release rewards until deployment and hosting finish',async()=>{
-  const flow=await engine.create(wallet,randomUUID(),'Build a Solana application',plan,false,'1000',8000,1500,wallet,24,'SOLANA_APP');
+  const flow=await engine.create(wallet,randomUUID(),'Build a Solana application',plan,false,'1000',8000,2000,wallet,24,'SOLANA_APP');
   await admit(engine,flow.id);
   await db.task.updateMany({where:{workflowId:flow.id},data:{state:'ACCEPTED'}});
   await db.workflow.update({where:{id:flow.id},data:{status:'VERIFYING'}});
@@ -180,7 +196,7 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   expect((await db.workflow.findUniqueOrThrow({where:{id:flow.id}})).status).toBe('REFUND_PENDING');
  });
  it('refunds funding finalized after cancellation without scheduling work',async()=>{
-  const f=await engine.create(wallet,randomUUID(),'Cancel pending funding',plan,false,'1000',8000,1500,wallet,24);
+  const f=await engine.create(wallet,randomUUID(),'Cancel pending funding',plan,false,'1000',8000,2000,wallet,24);
   await db.workflow.update({where:{id:f.id},data:{status:'AWAITING_FUNDS',deadlineAt:new Date(Date.now()+24*3600000)}});
   await db.chainOperation.create({data:{workflowId:f.id,operationKey:'fund:'+f.id,kind:'FUND',state:'SUBMITTED',signature:'TEST_ONLY_'+randomUUID()}});
   await engine.cancel(wallet,f.id);
@@ -192,7 +208,7 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   await db.chainOperation.update({where:{operationKey:'fund:'+f.id},data:{state:'FINALIZED'}});
  });
  it('expires never-broadcast funding only after checking finalized receipts',async()=>{
-  const f=await engine.create(wallet,randomUUID(),'Cancel unsigned funding',plan,false,'1000',8000,1500,wallet,24);
+  const f=await engine.create(wallet,randomUUID(),'Cancel unsigned funding',plan,false,'1000',8000,2000,wallet,24);
   await db.workflow.update({where:{id:f.id},data:{status:'AWAITING_FUNDS'}});
   await db.chainOperation.create({data:{workflowId:f.id,operationKey:'fund:'+f.id,kind:'FUND',lastValidBlockHeight:100}});
   await engine.cancel(wallet,f.id);
@@ -204,7 +220,7 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   expect((await db.chainOperation.findUniqueOrThrow({where:{operationKey:'fund:'+f.id}})).state).toBe('EXPIRED');
  });
  it('recovers direct wallet broadcasts before expiring a prepared operation',async()=>{
-  const f=await engine.create(wallet,randomUUID(),'Recover direct funding',plan,false,'1000',8000,1500,wallet,24);
+  const f=await engine.create(wallet,randomUUID(),'Recover direct funding',plan,false,'1000',8000,2000,wallet,24);
   await db.workflow.update({where:{id:f.id},data:{status:'AWAITING_FUNDS',deadlineAt:new Date(Date.now()+24*3600000)}});
   await db.chainOperation.create({data:{workflowId:f.id,operationKey:'fund:'+f.id,kind:'FUND',lastValidBlockHeight:100}});
   await engine.cancel(wallet,f.id);
@@ -215,7 +231,7 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   expect((await db.chainOperation.findUniqueOrThrow({where:{operationKey:'fund:'+f.id}})).state).toBe('FINALIZED');
  });
  it('moves a funded job to full refund when its delivery deadline is missed',async()=>{
-  const f=await engine.create(wallet,randomUUID(),'Refund a late delivery',plan,false,'1000',8000,1500,wallet,1);
+  const f=await engine.create(wallet,randomUUID(),'Refund a late delivery',plan,false,'1000',8000,2000,wallet,1);
   await admit(engine,f.id);
   await db.workflow.update({where:{id:f.id},data:{deadlineAt:new Date(0)}});
   await engine.recover();
@@ -239,7 +255,7 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
    const enrolled=await qEngine.enroll(w,{seatId,deviceKey:Keypair.generate().publicKey.toBase58(),name:'Quorum agent '+i,capabilities:['html'],maxConcurrent:1,public:false});
    workers.push(await db.worker.findUniqueOrThrow({where:{id:enrolled.id}}));
   }
-  const flow=await qEngine.create(keys[0].publicKey.toBase58(),randomUUID(),'Build with a review quorum',plan,false,'1000',8000,1500,keys[0].publicKey.toBase58(),24);
+  const flow=await qEngine.create(keys[0].publicKey.toBase58(),randomUUID(),'Build with a review quorum',plan,false,'1000',7000,3000,keys[0].publicKey.toBase58(),24);
   await admit(qEngine,flow.id);
   const build=await qEngine.claim(workers[0],'BUILD');expect(build).toBeTruthy();
   await qEngine.submit(workers[0],build!.attempt.id,build!.attempt.generation,{files:[{path:'index.html',content:'<html><body>Quorum</body></html>'}]});
@@ -256,6 +272,6 @@ describe.skipIf(!enabled)('PostgreSQL API and orchestration integration (chain/m
   await qEngine.delivered(flow.id,release.id);
   const rewards=await db.reward.findMany({where:{workflowId:flow.id}}),verifiers=rewards.filter(r=>r.kind==='VERIFY');
   expect(rewards.reduce((sum,r)=>sum+BigInt(r.amount),0n)).toBe(1000n);
-  expect(verifiers).toHaveLength(2);expect(verifiers.reduce((sum,r)=>sum+BigInt(r.amount),0n)).toBe(150n);
+  expect(verifiers).toHaveLength(2);expect(verifiers.reduce((sum,r)=>sum+BigInt(r.amount),0n)).toBe(300n);
  });
 });

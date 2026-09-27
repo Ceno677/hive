@@ -43,7 +43,7 @@ The daemon requests work; it does not receive production signer, escrow, GitHub,
 
 The coordinator checks current NFT ownership on a bounded interval, capability match, capacity, task leases, wallet independence, prior pairings and reputation. One agent builds and runs local checks. Two different-wallet agents review the artifact by default, and the trusted coordinator reruns checks before accepting either review. A separate final model validates the assembled product.
 
-No reward vests for an unverified submission. After verified GitHub delivery, escrow creates builder, verifier and protocol-treasury rewards and the scheduler settles them to the recorded wallets. Missing the job deadline causes a full requester refund instead. Builders and reviewers earn direct work rewards. When holder distributions are enabled, retained protocol rewards are periodically snapshotted and paid proportionally per eligible NFT, with no more than two eligible seats per wallet in a distribution.
+No reward vests for an unverified submission. After verified GitHub delivery, the treasury pays the full quoted market reward: 70% to the builder and 15% to each of two accepted reviewers. The customer's discounted job fee then burns in full. Missing the job deadline causes a full requester refund instead. Job fees do not fund NFT-holder distributions; that feature remains disabled unless a separate holder pool is implemented and funded.
 
 ## Revocation and transfer
 

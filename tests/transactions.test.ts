@@ -27,6 +27,8 @@ it('rejects invalid monetary configuration',()=>{
  expect(()=>config({HMD_BURN_AMOUNT:'1.5'})).toThrow();
  expect(()=>config({JOB_MIN_PRICE_USD:'100',JOB_MAX_PRICE_USD:'50'})).toThrow();
  expect(()=>config({BUILDER_BPS:'9000',VERIFIER_BPS:'1500'})).toThrow();
+ expect(()=>config({PAYMENT_MODE:'custodial',BUILDER_BPS:'7000',VERIFIER_BPS:'1000',REVIEW_QUORUM:'2'})).toThrow('Custodial rewards require');
+ expect(()=>config({HMD_MANUAL_PRICE_USD:'0.1',DEVNET_TEST_HMD_PRICE_USD:'0.1'})).toThrow('only one manual HMD price');
 });
 it('charges half of the estimated market price by default',()=>expect(config({NODE_ENV:'test'}).JOB_PRICE_MARKET_BPS).toBe(5000));
 it('uses the low-cost custodial integration without requiring a custom program',()=>{

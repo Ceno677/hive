@@ -1,5 +1,5 @@
 HIVE.MD - HIGH-QUALITY, CONTROLLED-BUDGET LAUNCH SETUP
-Updated: 2026-09-26
+Updated: 2026-09-27
 
 GOAL
 Run public intake for 2-12 hours, create strong builds, keep costs controlled, and keep
@@ -9,7 +9,7 @@ RECOMMENDED TOTAL BUDGET
 
 Fixed services for the launch month: about $72-$90
 AI usage reserve: start with $200 and add more only if paid job volume requires it
-Estimated total starting budget: about $275-$300, excluding domain, SOL and HMD liquidity
+Estimated total starting budget: about $275-$300, excluding domain, SOL and the HMD reward reserve
 
 Do not buy $499/month infrastructure at the start. Upgrade only if launch traffic proves
 that the lower tier is insufficient.
@@ -380,8 +380,9 @@ QUALITY PROCESS FOR EACH PAID JOB
    verifier reputation and disagreements count against it.
 8. GPT-6 Astra validates the complete assembled project.
 9. The verified artifact is pushed to the connected GitHub repository.
-10. Only then does the custodial ledger pay builders and verifiers and retain the treasury share.
-11. If GitHub delivery misses the disclosed deadline, the scheduler returns the full payment.
+10. Only then does the treasury pay the builder and two reviewers at the full quoted market value.
+11. After every reward is finalized, the customer's complete discounted job fee is burned.
+12. If GitHub delivery misses the disclosed deadline, the scheduler returns the full payment.
 
 For quality, never reduce REVIEW_QUORUM below 2 and never use GPT-6 Luna in the paid decision
 path. If the queue grows, make users wait; do not silently lower the model.
@@ -461,20 +462,20 @@ TREASURY AND NFT-HOLDER PAYMENTS
 ===============================================================================
 
 Lean launch mode uses one custody HMD token account plus a durable per-job PostgreSQL subledger.
-After independent verification, final validation and successful GitHub delivery, the exact
-integer amount is paid using BUILDER_BPS and VERIFIER_BPS. The remainder stays in
-TREASURY_WALLET. With two accepted reviewers, the verifier allocation is divided between them.
+Before a funded job starts, the backend confirms that the account can reserve both the customer's
+fee and the full market-rate agent reward. If it cannot, the payment moves directly to a full
+refund and no work is queued. After independent verification, final validation and successful
+GitHub delivery, the market reward is paid 70% to the builder and 15% to each of two reviewers.
+After those payouts finalize, the customer's entire discounted job fee is burned.
 
 If delivery misses JOB_DEADLINE_HOURS, no reward has vested and the scheduler returns the full
 payment. Unique signed SPL memos, database ledger rows and durable payout states make retries
 recoverable and idempotent. This is custodial escrow, not a trustless per-job on-chain vault.
 
-When HOLDER_DISTRIBUTIONS_ENABLED=true, retained protocol rewards are assigned exactly once to
-an immutable DAS collection-holder snapshot after HOLDER_DISTRIBUTION_INTERVAL_HOURS. The
-allocation is proportional per eligible NFT, capped at two eligible seats per wallet, conserves
-every raw HMD unit and uses retry-safe payout receipts. The default interval is 72 hours. Keep
-the feature disabled until the live ownership snapshot, treasury balance and small payout smoke
-test pass, and obtain appropriate legal/tax review before marketing the distribution.
+Successful job fees do not fund NFT-holder distributions. Keep HOLDER_DISTRIBUTIONS_ENABLED=false.
+The existing snapshot and payout ledger may be reused only after a separate treasury-funded holder
+allocation is deliberately implemented, funded and tested. Obtain appropriate legal/tax review
+before marketing any holder distribution.
 
 ===============================================================================
 BUY NOW VS WAIT
@@ -512,5 +513,5 @@ Recommended initial OpenAI reserve:       $200
 -------------------------------------------------------------
 Recommended launch funding:          about $275-$300
 
-SOL transaction fees, HMD liquidity, domain registration and any post-launch retention are not
+SOL transaction fees, the HMD agent-reward reserve, domain registration and any post-launch retention are not
 included. Prices can change; verify the linked official pricing pages immediately before purchase.

@@ -29,4 +29,4 @@ Keep holder distributions disabled until the ordinary payout/refund path passes.
 9. Exercise transfer revocation, invalid signatures, replay, modified transactions, executor timeout, failed checks and service restart recovery.
 10. Save transaction signatures, repository URL, test output, model usage and elapsed time as the launch evidence packet.
 
-After the rehearsal, remove `DEVNET_TEST_HMD_PRICE_USD`, disable/delete the temporary environment and rotate any staging-only credentials. Mainnet remains disabled until the real HMD CA passes the live DEX-liquidity gate and the same checklist is repeated with a deliberately small real amount.
+After the rehearsal, remove `DEVNET_TEST_HMD_PRICE_USD`, disable/delete the temporary environment and rotate any staging-only credentials. A new mainnet CA may use an explicit `HMD_MANUAL_PRICE_USD` during launch; remove it when reliable DEX discovery exists. Repeat the checklist with a deliberately small real amount before public access.

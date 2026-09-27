@@ -119,8 +119,15 @@ export class CustodialSolanaChain implements Chain {
     const value=typeof instruction.parsed==='string'?instruction.parsed:instruction.parsed?.memo;return typeof value==='string'&&value.startsWith(prefix);
    });
    if(found)return row.signature;
+   }
+   return null;
   }
-  return null;
+ private parsedBurn(transaction:any,source:PublicKey,mint:PublicKey,authority:PublicKey,amount:string){
+  return transaction?.transaction?.message?.instructions?.some((instruction:any)=>{
+   const parsed=instruction?.parsed;if(parsed?.type!=='burnChecked')return false;
+   const info=parsed.info??{},tokenAmount=info.tokenAmount??{};
+   return info.account===source.toBase58()&&info.mint===mint.toBase58()&&info.authority===authority.toBase58()&&String(tokenAmount.amount??info.amount)===amount;
+  })??false;
  }
  async operationSignature(id:string,kind:'FUND'|'MINT'|'REFUND',seatId?:number){
   const authority=await this.signer();
@@ -133,6 +140,13 @@ export class CustodialSolanaChain implements Chain {
  async transactionState(signature:string,lastValidHeight:number):Promise<'PENDING'|'FINALIZED'|'FAILED'|'EXPIRED'>{
   const s=(await this.connection.getSignatureStatuses([signature],{searchTransactionHistory:true})).value[0];
   if(s?.err)return'FAILED';if(s?.confirmationStatus==='finalized')return'FINALIZED';if(!s&&await this.connection.getBlockHeight('finalized')>lastValidHeight)return'EXPIRED';return'PENDING';
+ }
+ async treasuryBalance(){
+  const authority=await this.signer(),mint=await this.hmd(),source=getAssociatedTokenAddressSync(mint,authority.publicKey);
+  const account=await this.connection.getAccountInfo(source,'finalized');
+  if(!account)return 0n;
+  if(!account.owner.equals(TOKEN_PROGRAM_ID)||account.data.length!==165)throw new Fault(503,'treasury_token_account_invalid');
+  return account.data.readBigUInt64LE(64);
  }
  async broadcast(transaction:string){
   const tx=Transaction.from(Buffer.from(transaction,'base64'));if(!tx.verifySignatures())throw new Fault(400,'invalid_transaction_signature');
@@ -155,5 +169,17 @@ export class CustodialSolanaChain implements Chain {
   const tx=new Transaction({feePayer:authority.publicKey,...block}).add(createAssociatedTokenAccountIdempotentInstruction(authority.publicKey,destination,to,mint),createTransferCheckedInstruction(source,mint,destination,authority.publicKey,amount,token.decimals),memoInstruction(memo,authority.publicKey));
   tx.sign(authority);const signature=await this.connection.sendRawTransaction(tx.serialize(),{skipPreflight:false,maxRetries:3});
   const result=await this.connection.confirmTransaction({...block,signature},'finalized');if(result.value.err)throw new Fault(502,'settlement_failed');return signature;
+ }
+ async burnFee(_id:string,amount:string,receipt:string){
+  const authority=await this.signer(),mint=await this.hmd(),token=await getMint(this.connection,mint),source=getAssociatedTokenAddressSync(mint,authority.publicKey),memo=`hive:burn:${receipt}`;
+  for(const row of await this.connection.getSignaturesForAddress(source,{limit:1000},'finalized')){
+   if(row.err)continue;
+   const tx=await this.connection.getParsedTransaction(row.signature,{commitment:'finalized',maxSupportedTransactionVersion:0});
+   if(tx&&!tx.meta?.err&&this.parsedMemo(tx,memo)&&this.parsedBurn(tx,source,mint,authority.publicKey,amount))return row.signature;
+  }
+  const block=await this.connection.getLatestBlockhash('finalized');
+  const tx=new Transaction({feePayer:authority.publicKey,...block}).add(createBurnCheckedInstruction(source,mint,authority.publicKey,amount,token.decimals),memoInstruction(memo,authority.publicKey));
+  tx.sign(authority);const signature=await this.connection.sendRawTransaction(tx.serialize(),{skipPreflight:false,maxRetries:3});
+  const result=await this.connection.confirmTransaction({...block,signature},'finalized');if(result.value.err)throw new Fault(502,'fee_burn_failed');return signature;
  }
 }

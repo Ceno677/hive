@@ -42,7 +42,7 @@ Use `PAYMENT_MODE=custodial` and supply real launch values in .env:
 
 - SOLANA_RPC_URL, SOLANA_CLUSTER and HMD_MINT. No HIVE_PROGRAM_ID is required in custodial mode.
 - SEAT_COLLECTION_ADDRESS, MINT_BASE_URI and HMD_BURN_AMOUNT. MAX_SEATS_PER_WALLET defaults to 2 and is enforced in serializable database reservations.
-- BUILDER_BPS, VERIFIER_BPS and TREASURY_WALLET. Dynamic quote policy uses current sourced market rates, JOB_PRICE_MARKET_BPS (5000 = 50%), price bounds, quote TTL and HMD liquidity/deviation gates.
+- BUILDER_BPS, VERIFIER_BPS and TREASURY_WALLET. `VERIFIER_BPS` is the share for each accepted reviewer; with the default quorum use `7000 / 1500 / 1500`. Dynamic quote policy uses current sourced market rates, JOB_PRICE_MARKET_BPS (5000 = 50%), price bounds and quote TTL. Use `HMD_MANUAL_PRICE_USD` during initial price discovery, then remove it to restore liquidity/deviation-checked DEX pricing.
 - CUSTODY_KEYPAIR_PATH on the trusted service host only. Its public key must equal TREASURY_WALLET and it must remain the collection update authority for launch minting.
 - AI_API_KEY plus either AI_MODEL or every role-specific model, and provider/base URL. OpenAI Responses/Chat and Anthropic adapters are available.
 - EXECUTION_ENABLED=true after building/testing the execution image.
@@ -51,9 +51,9 @@ Use `PAYMENT_MODE=custodial` and supply real launch values in .env:
 - SOLANA_BACKUP_RPC_URL, Turnstile keys, private S3 storage, TRUST_PROXY=true and OPERATIONS_TOKEN are required by production validation.
 - GAS_POLICY=user-pays and SETTLEMENT_POLICY=final-release only if the owner approves those policies.
 
-Prices are positive integer token base units, never decimal floats. Mint decimals come from the actual token mint. Fee shares use basis points; the remainder stays in the configured treasury. Set JOB_DEADLINE_HOURS from 1 to 168; the deadline is shown with the quote and cryptographically bound to the funding memo. Rewards vest only after verified GitHub delivery. The scheduler automatically returns the full custodial balance after an expired job. Alternative partial-work compensation policies need additional implementation, not just different marketing copy.
+Prices are positive integer token base units, never decimal floats. Mint decimals come from the actual token mint. In custodial mode, reward basis points must allocate 100% of the market-rate reward across the builder and required reviewers. Set JOB_DEADLINE_HOURS from 1 to 168; the deadline is shown with the quote and cryptographically bound to the funding memo. Rewards vest only after verified GitHub delivery. The scheduler automatically returns the full customer fee after an expired job. Alternative partial-work compensation policies need additional implementation, not just different marketing copy.
 
-In custodial mode, each paid protocol reward can be assigned exactly once to a holder distribution. The scheduler takes one DAS collection snapshot after the configured interval, records its hash and finalized reference slot, caps eligibility at two NFTs per wallet, conserves every raw token unit and pays each wallet with a unique retry-safe settlement memo. Distribution history and entries are publicly inspectable through `/api/holder-distributions`.
+Job fees do not fund holder distributions: a successfully delivered job burns the customer's full fee. The existing holder-distribution ledger therefore stays disabled unless a separate treasury-funded holder allocation is introduced and tested. Distribution history and entries remain publicly inspectable through `/api/holder-distributions`.
 
 Only classic SPL Token mints and conventional Metaplex NFTs are supported. Token-2022 extensions, compressed NFTs, gas sponsorship, automatic mainnet program deployment and arbitrary sandbox internet access are intentionally not enabled.
 
@@ -61,7 +61,7 @@ Only classic SPL Token mints and conventional Metaplex NFTs are supported. Token
 
 Custodial mode does not deploy a custom hive program. A user-paid atomic transaction burns exactly 8,888 HMD, creates the immutable Metaplex NFT, and verifies it into the collection. Removing or changing any instruction invalidates the server's partial signatures. The database reserves a unique seat under serializable isolation and independently enforces the two-seat lifetime mint limit.
 
-Job payments transfer HMD into the custody wallet's token account. Each signed transaction carries a unique job memo; PostgreSQL maintains the per-job subledger. Payout/refund memos and `PAYING`/`REFUND_SENDING` recovery states prevent ordinary retries from paying twice. This is honest custodial escrow: it is cheaper, but customers trust the service and custody wallet.
+Job payments transfer HMD into the custody wallet's token account. Each signed transaction carries a unique job memo; PostgreSQL maintains the per-job subledger. Before work starts, the coordinator reserves enough treasury HMD for the full market-rate agent reward and the customer's eventual fee burn. If capacity is unavailable, the payment is returned without scheduling work. After accepted GitHub delivery, the treasury pays the builder and independent reviewers, then burns the customer's complete job fee with a unique retry-safe memo. A missed deadline before completion returns the full fee and releases the treasury reservation. Payout, burn and refund journals prevent ordinary retries from executing twice. This is honest custodial escrow: it is cheaper, but customers trust the service and custody wallet.
 
 Set `HMD_MINT` only when the token launches, then run `npm run nft:bind-hmd` to derive `HMD_BURN_AMOUNT`. Run the credentialed mainnet smoke suite before opening mint or payment routes.
 
@@ -142,7 +142,7 @@ Local integration tests need a dedicated PostgreSQL database named `hive_test`. 
 
 Unit tests run without external credentials; integration tests use actual PostgreSQL and explicit chain/model doubles. Browser smoke serves the real frontend in isolation and uses a generated wallet plus mocked unavailable API states; API signature verification is covered separately by the PostgreSQL integration suite. Rust tests compile the native program and exercise accounting when Docker/tooling is available. These do not replace validator/devnet transaction tests.
 
-An unlisted devnet test token can set `DEVNET_TEST_HMD_PRICE_USD` in an isolated staging environment so quote/payment paths can be exercised before HMD has a DEX market. Configuration refuses this override on `mainnet-beta`; mainnet quotes always use the live liquidity-checked DEX source.
+An unlisted devnet test token can set `DEVNET_TEST_HMD_PRICE_USD` in an isolated staging environment. A brand-new mainnet mint without a DEX pair can explicitly set `HMD_MANUAL_PRICE_USD`; quotes expose `tokenPriceSource=manual`, skip DEX depth checks and still use AI market research for the normal job value. Remove the manual value as soon as reliable DEX pricing exists.
 
 ## Operations
 

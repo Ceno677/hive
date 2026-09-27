@@ -7,6 +7,10 @@ import type {Config} from '../shared/config.js';
 import {scan} from '../verification/scan.js';
 import type {JobPricing} from '../pricing/quote.js';
 const live=['CLAIMED','RUNNING'];
+const rewardBudget=(flow:{amount:string;pricing:unknown})=>{
+ const value=flow.pricing&&typeof flow.pricing==='object'&&!Array.isArray(flow.pricing)?(flow.pricing as Record<string,unknown>).marketAmountBaseUnits:undefined;
+ return typeof value==='string'&&/^[1-9][0-9]{0,19}$/.test(value)?BigInt(value):BigInt(flow.amount);
+};
 export class Engine {
  constructor(public db:PrismaClient,public chain:Chain,public store:ArtifactStore,public c:Config){}
  async requireOwned(w:Worker){
@@ -52,11 +56,34 @@ export class Engine {
  async admit(id:string,signature:string){
   const flow=await this.db.workflow.findUniqueOrThrow({where:{id}});
   if(!flow.deadlineAt||!await this.chain.finalized(signature)||!await this.chain.funded(flow.wallet,id,flow.amount,flow.planHash!,Math.floor(flow.deadlineAt.getTime()/1000),signature))throw new Fault(409,'payment_not_finalized');
+  const treasuryBalance=this.c.PAYMENT_MODE==='custodial'&&this.chain.treasuryBalance?await this.chain.treasuryBalance():undefined;
   return serial(async tx=>{
    const f=await tx.workflow.findUniqueOrThrow({where:{id}});
    if(f.fundedSignature)return f;
    if(!['QUOTED','AWAITING_FUNDS','CANCEL_REQUESTED'].includes(f.status))throw new Fault(409,'workflow_not_payable');
    const cancelling=f.status==='CANCEL_REQUESTED';
+   if(!cancelling&&treasuryBalance!==undefined){
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('hive-treasury-reserve'))`;
+    let reserved=0n;
+    const active=await tx.workflow.findMany({where:{fundedSignature:{not:null},status:{notIn:['CANCELLED','FAILED','PAYMENT_FAILED']}},select:{id:true,status:true,amount:true,pricing:true}});
+    for(const current of active){
+     if(['REFUND_PENDING','REFUND_SENDING','CANCEL_REQUESTED'].includes(current.status)){
+      if(!await tx.ledgerEntry.findUnique({where:{operationKey:'refund:'+current.id}}))reserved+=BigInt(current.amount);
+     }else if(current.status==='COMPLETED'){
+      const unpaid=await tx.reward.findMany({where:{workflowId:current.id,state:{not:'PAID'}},select:{amount:true}});
+      reserved+=unpaid.reduce((sum,row)=>sum+BigInt(row.amount),0n);
+      if(!await tx.ledgerEntry.findUnique({where:{operationKey:'burn:'+current.id}}))reserved+=BigInt(current.amount);
+     }else reserved+=BigInt(current.amount)+rewardBudget(current);
+    }
+    const required=reserved+BigInt(f.amount)+rewardBudget(f);
+    if(treasuryBalance<required){
+     await tx.workflow.update({where:{id},data:{status:'REFUND_PENDING',failure:'treasury_capacity_unavailable',fundedSignature:signature}});
+     await tx.ledgerEntry.create({data:{operationKey:'fund:'+id,workflowId:id,kind:'FUNDED',amount:f.amount,signature}});
+     await event(tx,id,'workflow.funded');
+     await event(tx,id,'workflow.treasury_capacity_unavailable',{required:required.toString(),available:treasuryBalance.toString()});
+     return tx.workflow.findUniqueOrThrow({where:{id}});
+    }
+   }
    await tx.workflow.update({where:{id},data:{status:cancelling?'REFUND_PENDING':'QUEUED',fundedSignature:signature}});
    await tx.ledgerEntry.create({data:{operationKey:'fund:'+id,workflowId:id,kind:'FUNDED',amount:f.amount,signature}});
    if(!cancelling)await tx.task.updateMany({where:{workflowId:id,dependencies:{none:{}}},data:{state:'QUEUED'}});
@@ -203,7 +230,7 @@ export class Engine {
  }
  private async complete(tx:Tx,f:any,evidence:Prisma.InputJsonValue){
    const id=f.id as string;
-   const amounts=split(BigInt(f.amount),f.builderBps,f.verifierBps);
+   const amounts=split(this.c.PAYMENT_MODE==='custodial'?rewardBudget(f):BigInt(f.amount),f.builderBps,f.verifierBps);
    for(let i=0;i<f.tasks.length;i++){
     const t=f.tasks[i],b=t.attempts[0];
     const taskBuilder=amounts.builder/BigInt(f.tasks.length)+(i===0?amounts.builder%BigInt(f.tasks.length):0n);
@@ -216,7 +243,8 @@ export class Engine {
      if(amount>0n)await tx.reward.create({data:{workflowId:id,kind:'VERIFY',beneficiary:reviews[j].attempt.ownerWallet,amount:amount.toString(),receiptHash:hash({id,task:t.id,kind:'VERIFY',verification:reviews[j].id})}});
     }
    }
-   if(amounts.protocol>0n)await tx.reward.create({data:{workflowId:id,kind:'PROTOCOL',beneficiary:f.treasury,amount:amounts.protocol.toString(),receiptHash:hash({id,kind:'PROTOCOL'})}});
+   if(this.c.PAYMENT_MODE!=='custodial'&&amounts.protocol>0n)await tx.reward.create({data:{workflowId:id,kind:'PROTOCOL',beneficiary:f.treasury,amount:amounts.protocol.toString(),receiptHash:hash({id,kind:'PROTOCOL'})}});
+   if(this.c.PAYMENT_MODE==='custodial'&&amounts.protocol>0n)throw new Fault(503,'treasury_reward_allocation_incomplete');
    await tx.workflow.update({where:{id},data:{status:'COMPLETED'}});
    await event(tx,id,'workflow.completed',{evidence});
  }

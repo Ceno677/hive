@@ -92,7 +92,8 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   cluster:c.SOLANA_CLUSTER,hosted:true,
   mint:{enabled:!missing(c,mintRequired).length,missing:missing(c,mintRequired)},
   jobs:{enabled:!jobMissing.length&&c.EXECUTION_ENABLED==='true',missing:jobMissing,execution:c.EXECUTION_ENABLED==='true'},
-  pricing:{model:'AI_MARKET_RESEARCH',marketPercentageBps:c.JOB_PRICE_MARKET_BPS,quoteTtlSeconds:c.JOB_QUOTE_TTL_SECONDS,source:c.DEVNET_TEST_HMD_PRICE_USD?'devnet-test':'dexscreener',minimumLiquidityUsd:c.HMD_PRICE_MIN_LIQUIDITY_USD,maxQuoteLiquidityBps:c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS},
+  pricing:{model:'AI_MARKET_RESEARCH',marketPercentageBps:c.JOB_PRICE_MARKET_BPS,quoteTtlSeconds:c.JOB_QUOTE_TTL_SECONDS,source:c.HMD_MANUAL_PRICE_USD?'manual':c.DEVNET_TEST_HMD_PRICE_USD?'devnet-test':'dexscreener',minimumLiquidityUsd:c.HMD_MANUAL_PRICE_USD?0:c.HMD_PRICE_MIN_LIQUIDITY_USD,maxQuoteLiquidityBps:c.HMD_MANUAL_PRICE_USD?null:c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS},
+  economics:{customerFee:'BURN_ON_SUCCESS',failedJob:'FULL_REFUND',agentRewards:'TREASURY_MARKET_PRICE',builderBps:Number(c.BUILDER_BPS??0),reviewerBpsEach:Number(c.VERIFIER_BPS??0)},
   skills:Object.keys(skills).filter(s=>s!=='rust'||!!c.RUST_SANDBOX_IMAGE),tokenMint:c.HMD_MINT??null,quality:{reviewQuorum:c.REVIEW_QUORUM,repairPasses:c.AGENT_REPAIR_PASSES},
   delivery:{site:c.NETLIFY_SITE_ID??null,githubOwner:c.GITHUB_ALLOWED_OWNER??null,githubConnect:Boolean(c.GITHUB_CLIENT_ID&&c.GITHUB_CLIENT_SECRET),programConfigured:c.SOLANA_RELEASES_ENABLED==='true'&&Boolean(c.DEPLOY_PROGRAM_SEED&&c.SOLANA_BUILD_IMAGE)},
   holderDistributions:{enabled:c.HOLDER_DISTRIBUTIONS_ENABLED==='true',intervalHours:c.HOLDER_DISTRIBUTION_INTERVAL_HOURS},
@@ -152,7 +153,7 @@ export function buildServer(opts:{db:PrismaClient;c:Config;chain:Chain;store:Art
   const token=await chain.tokenInfo();
   if(token.mint!==c.HMD_MINT)throw new Fault(503,'token_mint_mismatch');
   const pricing=await createJobPricing({c,model:pricingModel,prompt:b.prompt,plan:planned,mode:b.mode,mint:token.mint,decimals:token.decimals});
-  return engine.create(w,b.requestKey,b.prompt,planned,b.public,pricing.amountBaseUnits,Number(c.BUILDER_BPS),Number(c.VERIFIER_BPS),c.TREASURY_WALLET!,c.JOB_DEADLINE_HOURS!,b.mode,deploymentTarget,pricing);
+  return engine.create(w,b.requestKey,b.prompt,planned,b.public,pricing.amountBaseUnits,Number(c.BUILDER_BPS),Number(c.VERIFIER_BPS)*c.REVIEW_QUORUM,c.TREASURY_WALLET!,c.JOB_DEADLINE_HOURS!,b.mode,deploymentTarget,pricing);
  });
  app.post('/api/requests/:id/prepare-payment',async r=>payments.prepare(await wallet(r),idOf(r)));
  app.post('/api/requests/:id/submit',async r=>{const b=z.object({transaction:z.string().max(16000)}).strict().parse(r.body);return payments.broadcast(await wallet(r),'fund:'+idOf(r),b.transaction);});

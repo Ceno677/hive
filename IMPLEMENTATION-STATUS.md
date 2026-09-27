@@ -17,7 +17,7 @@ This repository contains the backend and web integration, with the API and sched
 - Existing UI controls integrated without replacing the design; original art lock preserved.
 - OpenAI Responses/Chat and Anthropic adapters with role-specific models, reasoning/service-tier controls, input/output bounds, private-response mode, bounded retry/backoff, usage logs and truncation rejection.
 - Primary/backup Solana RPC failover, production dependency/config probes, Turnstile-protected model-backed quotes, worker reputation gates, anti-repeat reviewer pairing and deadline warnings.
-- Periodic holder-revenue epochs with DAS collection snapshots, immutable snapshot hashes, two-seat eligibility caps, exact integer allocation, durable payout retries and public distribution proof routes.
+- Optional periodic holder-distribution epochs with DAS collection snapshots, immutable snapshot hashes, two-seat eligibility caps, exact integer allocation, durable payout retries and public distribution proof routes. Job fees no longer fund this ledger because successful fees burn in full.
 - Authenticated remote Docker execution for Railway-hosted schedulers plus a Caddy/Compose runner package for trusted checks and project-operated agents.
 - Wallet-linked GitHub App authorization, writable-repository discovery and delivery constrained to each customer's verified installation; user access tokens are not retained.
 
@@ -38,7 +38,7 @@ This repository contains the backend and web integration, with the API and sched
 
 ## Not yet verified live
 
-- HMD does not exist yet, so the final mainnet token binding, exact base-unit burn amount and market-liquidity checks cannot run.
+- HMD does not exist yet, so the final mainnet token binding and exact base-unit burn amount cannot run. A temporary or new mainnet token can use an explicit manual launch price before DEX discovery exists.
 - The permanent Arweave NFT release and mainnet collection are prepared, but no live 8,888 HMD burn/mint transaction has run.
 - Provider credentials and role models are configured, but a complete provider-backed builder/reviewer delivery benchmark has not run because the execution host and three independent NFT operators are not online.
 - No mint/burn/escrow transaction, metadata CPI or payout has run against a validator/devnet in this session. Native Rust tests are not validator integration tests.

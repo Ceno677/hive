@@ -33,6 +33,8 @@ export interface Chain {
  finalized(signature:string):Promise<boolean>;
  broadcast(transaction:string):Promise<string>;
  settle(id:string,beneficiary:string,amount:string,receipt:string,refund?:boolean):Promise<string>;
+ treasuryBalance?():Promise<bigint>;
+ burnFee?(id:string,amount:string,receipt:string):Promise<string>;
 }
 export function resilientConnection(primary:Connection,backup?:Connection):Connection{
  if(!backup)return primary;

@@ -174,6 +174,29 @@ export class Payments {
     },this.db);
    }catch(error){await this.db.reward.updateMany({where:{id:r.id,state:'PAYING'},data:{state:'CLAIMABLE'}});throw error;}
   }
+  if(this.c.PAYMENT_MODE==='custodial'){
+   if(!this.chain.burnFee)throw new Fault(503,'fee_burn_not_configured');
+   const completed=await this.db.workflow.findMany({where:{status:'COMPLETED',rewards:{some:{},every:{state:'PAID'}}},take:50});
+   for(const flow of completed){
+    if(await this.db.ledgerEntry.findUnique({where:{operationKey:'burn:'+flow.id}}))continue;
+    const receipt=hash({id:flow.id,kind:'CUSTOMER_FEE_BURN',amount:flow.amount});
+    const operation=await this.db.chainOperation.upsert({where:{operationKey:'burn:'+flow.id},create:{workflowId:flow.id,operationKey:'burn:'+flow.id,kind:'BURN',state:'PREPARED'},update:{}});
+    if(operation.state==='FINALIZED')continue;
+    const claim='claim:'+randomUUID(),claimed=await this.db.chainOperation.updateMany({where:{id:operation.id,OR:[{state:{in:['PREPARED','FAILED']}},{state:'PAYING',updatedAt:{lt:new Date(Date.now()-15*60000)}}]},data:{state:'PAYING',error:claim}});
+    if(!claimed.count)continue;
+    try{
+     const signature=await this.chain.burnFee(flow.id,flow.amount,receipt);
+     await serial(async tx=>{
+      const finalized=await tx.chainOperation.updateMany({where:{id:operation.id,state:'PAYING',error:claim},data:{state:'FINALIZED',signature,error:null}});if(!finalized.count)return;
+      await tx.ledgerEntry.upsert({where:{operationKey:'burn:'+flow.id},create:{operationKey:'burn:'+flow.id,workflowId:flow.id,kind:'BURN',amount:flow.amount,signature},update:{signature}});
+      await event(tx,flow.id,'payment.burned',{amount:flow.amount});
+     },this.db);
+    }catch(error){
+     await this.db.chainOperation.updateMany({where:{id:operation.id,state:'PAYING',error:claim},data:{state:'FAILED',error:(error instanceof Error?error.message:'fee burn failed').slice(0,1000)}});
+     throw error;
+    }
+   }
+  }
   for(const f of await this.db.workflow.findMany({where:{status:{in:['REFUND_PENDING','REFUND_SENDING']}},take:50})){
    if(await this.db.reward.count({where:{workflowId:f.id}}))throw new Fault(409,'earned_rewards_prevent_full_refund');
    if(f.status==='REFUND_PENDING'){

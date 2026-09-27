@@ -20,12 +20,12 @@ const estimateJsonSchema={type:'object',additionalProperties:false,required:['es
 }} as const;
 
 export type MarketEstimate=z.infer<typeof estimateSchema>;
-export type TokenPrice={usd:string;source:'dexscreener'|'devnet-test';liquidityUsd:number;pairs:number;observedAt:string};
+export type TokenPrice={usd:string;source:'dexscreener'|'manual'|'devnet-test';liquidityUsd:number;pairs:number;observedAt:string};
 export type JobPricing={
  version:1;currency:'USD';estimatedHours:number;complexity:MarketEstimate['complexity'];confidence:MarketEstimate['confidence'];factors:string[];sources:MarketEstimate['sources'];
  marketRateUsd:number;marketPriceUsd:string;chargedPriceUsd:string;marketPercentageBps:number;
  tokenPriceUsd:string;tokenPriceSource:TokenPrice['source'];tokenLiquidityUsd:number;tokenPairCount:number;tokenPriceObservedAt:string;
- tokenDecimals:number;amountBaseUnits:string;expiresAt:string;
+ tokenDecimals:number;amountBaseUnits:string;marketAmountBaseUnits:string;expiresAt:string;
 };
 
 const skillHours={static:4,node:8,rust:16} as const;
@@ -51,6 +51,10 @@ export function amountForUsd(chargedCents:bigint,tokenUsd:string,decimals:number
 
 let cached:{mint:string;until:number;value:TokenPrice}|undefined;
 export async function hmdUsdPrice(c:Config,mint:string,now=Date.now()):Promise<TokenPrice>{
+ if(c.HMD_MANUAL_PRICE_USD){
+  decimalFraction(c.HMD_MANUAL_PRICE_USD);
+  return{usd:c.HMD_MANUAL_PRICE_USD,source:'manual',liquidityUsd:0,pairs:0,observedAt:new Date(now).toISOString()};
+ }
  if(c.DEVNET_TEST_HMD_PRICE_USD){
   if(c.SOLANA_CLUSTER==='mainnet-beta')throw new Fault(503,'test_price_forbidden');
   decimalFraction(c.DEVNET_TEST_HMD_PRICE_USD);
@@ -98,10 +102,10 @@ export async function createJobPricing(input:{c:Config;model:Model;prompt:string
  const marketCents=ceilDiv(hourTenths*rateCents,10n);
  const rawCharge=ceilDiv(marketCents*BigInt(input.c.JOB_PRICE_MARKET_BPS),10000n);
  const chargedCents=rawCharge<BigInt(input.c.JOB_MIN_PRICE_USD*100)?BigInt(input.c.JOB_MIN_PRICE_USD*100):rawCharge>BigInt(input.c.JOB_MAX_PRICE_USD*100)?BigInt(input.c.JOB_MAX_PRICE_USD*100):rawCharge;
- if(chargedCents*10000n>BigInt(token.liquidityUsd*100)*BigInt(input.c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS))throw new Fault(503,'token_price_depth_insufficient','The HMD market is too shallow for a reliable quote of this size',{chargedPriceUsd:money(chargedCents),liquidityUsd:token.liquidityUsd});
- const amountBaseUnits=amountForUsd(chargedCents,token.usd,input.decimals),expiresAt=new Date(now+input.c.JOB_QUOTE_TTL_SECONDS*1000).toISOString();
+ if(token.source==='dexscreener'&&chargedCents*10000n>BigInt(token.liquidityUsd*100)*BigInt(input.c.HMD_PRICE_MAX_QUOTE_LIQUIDITY_BPS))throw new Fault(503,'token_price_depth_insufficient','The HMD market is too shallow for a reliable quote of this size',{chargedPriceUsd:money(chargedCents),liquidityUsd:token.liquidityUsd});
+ const amountBaseUnits=amountForUsd(chargedCents,token.usd,input.decimals),marketAmountBaseUnits=amountForUsd(marketCents,token.usd,input.decimals),expiresAt=new Date(now+input.c.JOB_QUOTE_TTL_SECONDS*1000).toISOString();
  return{version:1,currency:'USD',estimatedHours:hours,complexity:estimate.complexity,confidence:estimate.confidence,factors:estimate.factors,sources:estimate.sources,
   marketRateUsd:estimate.marketRateUsd,marketPriceUsd:money(marketCents),chargedPriceUsd:money(chargedCents),marketPercentageBps:input.c.JOB_PRICE_MARKET_BPS,
   tokenPriceUsd:token.usd,tokenPriceSource:token.source,tokenLiquidityUsd:token.liquidityUsd,tokenPairCount:token.pairs,tokenPriceObservedAt:token.observedAt,
-  tokenDecimals:input.decimals,amountBaseUnits,expiresAt};
+  tokenDecimals:input.decimals,amountBaseUnits,marketAmountBaseUnits,expiresAt};
 }
